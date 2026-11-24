@@ -126,7 +126,7 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 - **交给系统安装**：APK 通过 `FileProvider`（`${applicationId}.updates`，只暴露 `cache/updates/`）以 `content://` 交给安装器，不落外部存储。覆盖安装会保留账号、看板顺序和设置。
 - 手动构建的调试包与 Release 包签名不同，装到同一台机器上需要先卸载旧包；从同一来源升级不会有这个问题。
 
-> 发布新版本的流程：改 `app/build.gradle.kts` 里的 `versionCode` / `versionName` → 构建 APK → 在 GitHub 建一个 tag 为 `v<versionName>` 的 Release 并上传 APK。App 只认带 `.apk` 资产的正式 Release。
+> 发布新版本的流程：改 `app/build.gradle.kts` 里的 `versionCode` / `versionName` → `./gradlew.bat :app:assembleRelease` → 在 GitHub 建一个 tag 为 `v<versionName>` 的 Release 并上传 `app-release.apk`。App 只认带 `.apk` 资产的正式 Release。
 
 ## 构建
 
@@ -149,7 +149,19 @@ cd D:\code\管院通
 
 如果本机使用 Clash 等代理，`gradle.properties` 已配置 `127.0.0.1:7890`，按需修改；不需要代理时把文末四行 `systemProp.*.proxy*` 删掉即可。
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`
+产物：
+
+- 调试包：`app/build/outputs/apk/debug/app-debug.apk`
+- 发布包：`./gradlew.bat :app:assembleRelease` → `app/build/outputs/apk/release/app-release.apk`
+
+### 发布签名
+
+发布包刻意沿用调试证书：和本地调试包同一套签名，应用内更新下载回来后可以直接覆盖安装，不需要用户先卸载。
+
+- 密钥文件放在项目的 `keystore/guanlitong-debug.jks`，密码写在 `keystore.properties`。
+- 这两个路径都写进了 `.gitignore`，**不会随源码公开**；换机器时把这两个文件拷过去即可保持同一签名。
+- 没有 `keystore.properties` 时构建会自动退回 Android 默认调试签名，证书相同，构建结果一致。
+- 密钥只在本机存在，公开仓库里只有「没有密钥也能构建」的配置逻辑。
 
 > 验证码识别使用打包进 APK 的 ML Kit Latin 模型（不依赖 Google Play 服务），APK 会比不带 OCR 的版本大约 40 MB。
 

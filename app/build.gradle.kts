@@ -1,7 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// 发布签名：密钥放在项目的 keystore/ 目录，密码写在 keystore.properties；
+// 两者都在 .gitignore 里，不会随源码公开。没有这个文件时回退到调试签名。
+val releaseKeystore = Properties().apply {
+    rootProject.file("keystore.properties")
+        .takeIf { it.exists() }
+        ?.inputStream()
+        ?.use { load(it) }
+}
+
+val hasReleaseKeystore = releaseKeystore.getProperty("storeFile")
+    ?.let { rootProject.file(it).exists() } == true
 
 android {
     namespace = "com.sdmu.guanlitong"
@@ -16,9 +30,27 @@ android {
         versionName = "1.2.3"
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystore.getProperty("storeFile"))
+                storePassword = releaseKeystore.getProperty("storePassword")
+                keyAlias = releaseKeystore.getProperty("keyAlias")
+                keyPassword = releaseKeystore.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 有本地密钥就用它；没有时（比如别人 clone 后直接构建）退回调试签名，
+            // 两种方式证书相同，应用内更新都能覆盖安装。
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -12,3 +12,7 @@ local.properties
 *.apk
 /*.png
 .tmp_shots/
+
+# 签名密钥与密码，绝不提交
+keystore/
+keystore.properties
