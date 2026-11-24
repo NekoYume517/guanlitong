@@ -483,15 +483,18 @@ fun OverviewScreen(
             sdgyGroups = sdgyGroups,
             loggedInServices = accounts.filterValues { it.loggedIn }.keys,
             onRefreshSdgy = {
-                val raw = sdgyRepository.call { it.appList("1") }
-                val parsed = com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.withNativeTools(
-                    com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.parse(raw),
-                )
-                if (parsed.isNotEmpty()) {
-                    sdgyGroups = parsed
-                    com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.save(context, raw.toString())
-                }
-                parsed
+                // 未登录山管、服务器关机或断网都可能失败；失败时退回已有分组，不能影响编辑页打开。
+                runCatching {
+                    val raw = sdgyRepository.call { it.appList("1") }
+                    val parsed = com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.withNativeTools(
+                        com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.parse(raw),
+                    )
+                    if (parsed.isNotEmpty()) {
+                        sdgyGroups = parsed
+                        com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.save(context, raw.toString())
+                    }
+                    parsed
+                }.getOrDefault(sdgyGroups)
             },
             onDismiss = quickActionState::dismissEditor,
         )

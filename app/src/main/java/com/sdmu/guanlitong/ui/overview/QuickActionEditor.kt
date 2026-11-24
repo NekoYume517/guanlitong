@@ -118,7 +118,17 @@ fun QuickActionEditorSheet(
         }
     }.distinctBy { it.id }.filter { it.availableFor(loggedInServices) }
     var query by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { onRefreshSdgy() }
+    LaunchedEffect(Unit) {
+        // 山管未登录、服务器关机或断网时只保留本地候选；
+        // 异常如果抛进组合协程会直接闪退，这里必须吞掉。
+        try {
+            onRefreshSdgy()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // 忽略：候选区继续使用缓存与静态入口。
+        }
+    }
 
     LaunchedEffect(storedIds) { ids = storedIds }
 
@@ -266,8 +276,10 @@ fun QuickActionEditorSheet(
                             modifier = Modifier.padding(top = 12.dp),
                         )
                     }
-                    visibleGroups.forEach { (groupName, candidates) ->
-                        item(key = "group-${service.id}-$groupName") {
+                    // 分组标题可能重复（服务端分组名重复或与「其他入口」同名），
+                    // LazyColumn 的 key 重复会直接崩溃，所以用序号而不是标题做 key。
+                    visibleGroups.forEachIndexed { groupIndex, (groupName, candidates) ->
+                        item(key = "group-${service.id}-$groupIndex") {
                             Text(
                                 groupName,
                                 style = MaterialTheme.typography.titleSmall,
