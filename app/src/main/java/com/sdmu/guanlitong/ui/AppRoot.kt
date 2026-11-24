@@ -10,6 +10,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -45,11 +48,13 @@ import com.sdmu.guanlitong.data.FeatureAction
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
+import com.sdmu.guanlitong.data.SdgyPage
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtOrigin
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SessionRelogin
+import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
 import com.sdmu.guanlitong.data.JwxtPage
 import com.sdmu.guanlitong.data.update.UpdateClient
 import com.sdmu.guanlitong.data.update.UpdateInfo
@@ -65,6 +70,14 @@ import com.sdmu.guanlitong.ui.jwxt.JwxtSelectionScreen
 import com.sdmu.guanlitong.ui.jwxt.JwxtTasksScreen
 import com.sdmu.guanlitong.ui.mine.MineScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyHubScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyPayScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyPowerScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyScanScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyShotScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyTimetableScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyWebScreen
+import com.sdmu.guanlitong.ui.sdgy.SdgyXbcScreen
 import com.sdmu.guanlitong.ui.update.UpdateDialog
 import com.sdmu.guanlitong.ui.update.UpdateState
 import com.sdmu.guanlitong.ui.web.ServiceWebScreen
@@ -76,6 +89,14 @@ private sealed interface Dest {
     data class Web(val serviceId: String, val startUrl: String? = null) : Dest
     data class Account(val serviceId: String) : Dest
     data class Jwxt(val page: JwxtPage = JwxtPage.Timetable) : Dest
+    data class Sdgy(val page: SdgyPage = SdgyPage.Hub, val xbcCode: String? = null) : Dest
+    /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
+    data class SdgyWeb(
+        val title: String,
+        val appId: String,
+        val url: String = "",
+        val lx: String = "2",
+    ) : Dest
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -102,6 +123,15 @@ fun AppRoot(repository: AppRepository) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     // 放在覆盖页动画外：打开子页面后概览被移出组合，滚动位置也不能随之销毁。
     val overviewScrollState = rememberScrollState()
+    // 功能页选中的服务、搜索词同理：进入某个功能再返回时要保持原样，不能跳回第一个。
+    var featureServiceId by rememberSaveable {
+        mutableStateOf(ServiceCatalog.featureServices.first().id)
+    }
+    var featureQuery by rememberSaveable { mutableStateOf("") }
+    // 滚动状态也必须提权到覆盖页动画外；否则返回时 LazyColumn 会重新从 0 开始。
+    val featureScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    val featureSearchScrollState = rememberScrollState()
+    val featureSdgyListState = rememberLazyListState()
     var overlay by remember { mutableStateOf<Dest?>(null) }
     // +1 前进（页面从右侧滑入），-1 后退（页面向右滑出）。
     var pageDirection by remember { mutableIntStateOf(1) }
@@ -193,7 +223,13 @@ fun AppRoot(repository: AppRepository) {
 
     fun goForward(dest: Dest) {
         pageDirection = 1
-        overlay = dest
+        // 课表只有一个页面：山管侧的「我的课表」也进入教务课表页，
+        // 山管数据只在课程详情里补充挂科率和上课人。
+        overlay = if (dest is Dest.Sdgy && dest.page == SdgyPage.Timetable) {
+            Dest.Jwxt(JwxtPage.Timetable)
+        } else {
+            dest
+        }
     }
 
     fun goBack() {
@@ -214,6 +250,12 @@ fun AppRoot(repository: AppRepository) {
             FeatureAction.Timetable -> goForward(Dest.Jwxt(JwxtPage.Timetable))
 
             is FeatureAction.Jwxt -> goForward(Dest.Jwxt(action.page))
+
+            is FeatureAction.Sdgy -> goForward(Dest.Sdgy(action.page))
+
+            is FeatureAction.SdgyApp -> goForward(
+                Dest.SdgyWeb(action.action.title, action.action.appId, action.action.url, action.action.lx)
+            )
 
             is FeatureAction.Web -> goForward(Dest.Web(action.serviceId, action.url))
 
@@ -319,6 +361,7 @@ fun AppRoot(repository: AppRepository) {
                                 0 -> OverviewScreen(
                                     accounts = accounts,
                                     dashboard = repository.dashboard,
+                            quickActions = repository.quickActions,
                                     jwxtBaseUrl = jwxtBaseUrl,
                                     onOpenFeature = { openFeature(it) },
                                     onOpenTimetable = { goForward(Dest.Jwxt(JwxtPage.Timetable)) },
@@ -331,8 +374,19 @@ fun AppRoot(repository: AppRepository) {
 
                                 1 -> FeaturesScreen(
                                     accounts = accounts,
+                                    selectedServiceId = featureServiceId,
+                                    onSelectService = { featureServiceId = it },
+                                    query = featureQuery,
+                                    onQueryChange = { featureQuery = it },
                                     onOpenFeature = { openFeature(it) },
                                     onOpenAccount = { goForward(Dest.Account(it.id)) },
+                                    onOpenSdgyNative = { goForward(Dest.Sdgy(it)) },
+                                    onOpenSdgyWeb = { title, appId, url, lx ->
+                                        goForward(Dest.SdgyWeb(title, appId, url, lx))
+                                    },
+                                    scrollStates = featureScrollStates,
+                                    searchScrollState = featureSearchScrollState,
+                                    sdgyListState = featureSdgyListState,
                                     dataSourceLabel = jwxtSource
                                         .takeIf { it != JwxtSource.Official }
                                         ?.label,
@@ -349,6 +403,7 @@ fun AppRoot(repository: AppRepository) {
                                         repository.accounts.clearAll()
                                         CookieUtils.clearAll()
                                         JwxtCache.clear(context)
+                                        SdgySessionStore(context).clear()
                                     },
                                     jwxtSource = jwxtSource,
                                     versionName = currentVersion,
@@ -417,6 +472,57 @@ fun AppRoot(repository: AppRepository) {
                                 )
                             }
                         }
+
+                        is Dest.Sdgy -> when (dest.page) {
+                            SdgyPage.Hub -> SdgyHubScreen(
+                                onBack = { goBack() },
+                                onOpenNative = { goForward(Dest.Sdgy(it)) },
+                                onOpenWeb = { title, appId, url, lx ->
+                                    goForward(Dest.SdgyWeb(title, appId, url, lx))
+                                },
+                                onOpenAccount = { goForward(Dest.Account("sdgy")) },
+                            )
+
+                            SdgyPage.Timetable -> SdgyTimetableScreen(
+                                onBack = { goBack() },
+                                onOpenAccount = { goForward(Dest.Account("sdgy")) },
+                            )
+
+                            SdgyPage.Pay -> SdgyPayScreen(
+                                onBack = { goBack() },
+                                onOpenAccount = { goForward(Dest.Account("sdgy")) },
+                            )
+
+                            SdgyPage.Power -> SdgyPowerScreen(onBack = { goBack() })
+
+                            SdgyPage.Scan -> SdgyScanScreen(
+                                onBack = { goBack() },
+                                onOpenXbc = { code ->
+                                    goForward(Dest.Sdgy(SdgyPage.Xbc, code))
+                                },
+                            )
+
+                            SdgyPage.Shot -> SdgyShotScreen(onBack = { goBack() })
+
+                            SdgyPage.Xbc -> SdgyXbcScreen(
+                                initialCode = dest.xbcCode,
+                                onBack = {
+                                    if (dest.xbcCode != null) {
+                                        overlay = Dest.Sdgy(SdgyPage.Scan)
+                                    } else {
+                                        goBack()
+                                    }
+                                },
+                            )
+                        }
+
+                        is Dest.SdgyWeb -> SdgyWebScreen(
+                            title = dest.title,
+                            appId = dest.appId,
+                            url = dest.url,
+                            lx = dest.lx,
+                            onBack = { goBack() },
+                        )
 
                         is Dest.Jwxt -> {
                             val jwxtAccount = accounts["jwxt"] ?: Account(serviceId = "jwxt")

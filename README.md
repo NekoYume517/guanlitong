@@ -1,6 +1,6 @@
 # 管院通
 
-当前版本只保留**官方教务系统**与自建**抢课助手**，其余校园服务按计划逐个加回。
+当前版本内置**官方教务系统**、自建**抢课助手**与**山管app**（原生功能 + 官方网页），其余校园服务按计划逐个加回。
 
 源码与 Release 都在 GitHub：[NekoYume517/guanlitong](https://github.com/NekoYume517/guanlitong)。
 App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载后交给系统安装器覆盖安装。
@@ -11,6 +11,10 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 - **官方教务系统支持原生登录**：学号密码 + 验证码（ML Kit 离线识别，可手动改），可记住密码；登录后的 Cookie 同时注入 WebView
 - **教务数据来源可切换**：默认直连官方教务，也可以改用自建抢课助手（`jwxt.bansonic.top`，即 sdmu-website-2）；「功能」页只保留一个「教务系统」二级 tab
 - **教务课表已原生实现**：原生页面复用同一份登录态调教务接口，按周渲染课表，带本地缓存（两种来源各存一份）
+- **山管app 已内置**：原生登录山管账号（RSA 加密密码），课表 / 一卡通 / 宿舍用电 / 请销假 / 扫一扫为原生页面；官方应用总页由服务端 `api/app/list` 驱动，网页条目走内置 WebView
+- **统一课表**：功能集任意 tab、快捷卡片和山管「我的课表」都进入同一个课表页；教务数据优先，山管课表在教务无数据时兜底，并在课程详情补充挂科率与上课名单
+- **快捷功能可编辑**：长按卡片弹出菜单，编辑页顶部拖动排序；候选区只显示已登录服务的功能，已添加的卡片退出登录后仍保留
+- **三端统一保活**：官方教务、抢课助手、山管app 的会话都在回到 App 时自动检查，被顶号或过期自动重登，失败也不清除登录状态
 
 ## 页面结构
 
@@ -19,9 +23,15 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 | 页面 | 内容 |
 |---|---|
 | 概览 | 像桌面小组件一样自由组合：今日课程、快捷功能、教务概览、账号状态，每项都有小 / 中 / 大三种尺寸；底部面板真实预览添加、长按弹簧拖动排序、拖到右下角删除；顶部标题固定不随滚动，右上角直达添加面板与「我的」 |
-| 功能 | 顶部搜索；左侧纯文字服务栏，右侧两列功能胶囊（如 教务系统 → 课表 / 成绩查询 / 选课 / 考试安排） |
-| 我的 | 账号管理（只有「教务系统」这一个入口，登录状态跟随所选数据来源）、检查更新（从 GitHub Release 拉取新版本）、清除登录状态、关于 |
-| 原生课表 | 学期与周次切换、7 天 × 节次网格、课程详情；本地缓存优先、后台刷新；登录失效时引导到 WebView 登录 |
+| 功能 | 顶部搜索；左侧纯文字服务栏（教务系统 / 山管app / 其他），右侧两列功能胶囊；山管app 的原生工具与官方应用总页都在这里 |
+| 我的 | 账号管理（教务系统 / 山管app 两个入口）、检查更新（从 GitHub Release 拉取新版本）、清除登录状态、关于 |
+| 原生课表 | 统一入口：学期与周次切换、7 天 × 节次网格、课程详情；教务数据优先、山管课表兜底，详情补充山管挂科率与上课名单；本地缓存优先、后台刷新；登录失效时引导登录 |
+| 山管app | 官方应用总页：常用应用 + 全部分组由服务端驱动，图标远程加载；原生工具（课表 / 一卡通 / 宿舍用电 / 请销假）替换同名的官方网页入口 |
+| 山管一卡通 | 卡号与钱包余额、动态付款码；付款码倒计时自动刷新，识别到支付成功后提示「再付一笔」 |
+| 宿舍用电 | 选楼栋 / 楼层 / 房间，查剩余电量、表状态、电费余额与近 14 天用量 |
+| 请销假 | 内置离线 HTML 编辑器（`assets/editor.html`）填写申请，html2canvas 生成图片，保存到相册或系统分享 |
+| 扫一扫 | 内嵌取景器识别普通二维码与小白超人车牌码，支持手电筒与结果复制；车牌码可直接跳转小白超人 |
+| 小白超人 | 电动车地图与站点、账号选择、扫码 / 分享码开锁，登录态取内置网页的 token |
 | 原生成绩 | 按学期筛选，显示加权平均、学分、绩点与课程性质；失败时可转网页 |
 | 原生考试 | 考试时间、考场、形式与「未开始 / 进行中 / 已结束」状态 |
 | 原生选课 | 可选课程搜索、展开教学班查看时间/地点/容量，支持选课、退课与已选课程列表；抢课助手来源下，已满的教学班可以直接创建抢课任务 |
@@ -46,12 +56,13 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 
 ## 服务一览
 
-目前只保留官方教务系统与抢课助手；智慧山管、山管助手、图书馆、官网已从 UI 移除，等逐项确认后再加回。
+目前内置官方教务系统、抢课助手与山管app；山管助手、图书馆、官网已从 UI 移除，等逐项确认后再加回。
 
 | 服务 | 地址 | 登录方式 |
 |---|---|---|
 | 官方教务系统 | `https://jwxt.sdmu.edu.cn/jwglxt/xtgl/login_slogin.html` | 原生登录（验证码自动识别，可记住密码）或 WebView 登录；课表/成绩/考试/选课均为原生页 |
 | 抢课助手 | `https://jwxt.bansonic.top` | 站点账号密码登录（`POST /api/login`），Cookie 注入 WebView；可作为教务数据来源，后台用它配置的教务账号代查 |
+| 山管app | `http://222.206.86.42:8081`（`mobileapi_ydxy`） | 原生登录（RSA 公钥加密密码），会话与密码本地加密保存；课表 / 一卡通 / 用电 / 请销假 / 扫一扫为原生页，官方应用与其余功能走内置 WebView |
 
 ## 教务数据来源
 
@@ -73,17 +84,20 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 
 ### 掉线自动重登
 
-只要用户没有主动退出、且勾选过「记住密码」，官方教务和抢课助手掉线后都会自动重新登录：
+只要用户没有主动退出、且勾选过「记住密码」，官方教务、抢课助手和山管app 掉线后都会自动重新登录：
 
 - **触发时机**：打开 App / 切换数据来源时，如果本地会话已经没了，会先补登录；访问课表、成绩、考试、选课、抢课任务时，遇到会话失效会先自动重登再重放这次请求，页面不需要用户手动登录。
 - **重试策略**：默认 3 次，间隔 1s / 2s / 4s 指数退避；官方教务每轮自动识别新验证码，抢课助手每轮重新提交账号密码。
 - 重登成功后会把新 Cookie 注入 WebView 并刷新登录时间；3 次都失败才退回「登录失效」提示。主动退出登录或没保存密码时不会自动重试。
+- **山管app** 走同一套策略：回到 App 时由 `SessionKeeper` 统一检查三个账号，山管会话失效就用本地密码重新登录；失败只把状态标成「稍后重试」，登录状态和密码都保留，绝不清除。
 
 > 选课页之外的教务原生页（课表、成绩、考试）在抢课助手来源下显示「登录抢课助手」，会跳到唯一的账号入口（教务系统 → 数据来源 → 抢课助手）；「用网页打开」也会打开抢课助手站点。
 
 ## 原生课表
 
-课表数据由 App 直接向教务系统请求，不经过任何中转服务器：
+所有课表入口（教务功能、山管app「我的课表」、快捷卡片）都进入同一个页面：优先显示教务来源的数据；教务未登录或暂时没有数据时，用山管课表缓存兜底撑起同一页面，并在顶部注明来源。打开课程详情时会按课程名、教师、星期与节次匹配山管课程，补充挂科率、平均分、最高分、上课人数与上课名单。
+
+教务课表数据由 App 直接向教务系统请求，不经过任何中转服务器：
 
 1. 进入页面时读取 WebView `CookieManager` 中的 `jwglxt` Cookie；没有 Cookie 时显示「需要登录教务系统」，可直接弹原生登录框，或改用网页登录。
 2. `GET /kbcx/xskbcxZccx_cxXskbcxIndex.html?gnmkdm=N2154&layout=default` 解析学年/学期、校区等预渲染字段；被 302 到登录页即视为会话失效。
@@ -95,7 +109,7 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 
 > 页面 GET 不能带 `X-Requested-With`，否则学校网关会直接返回 `901`；该请求头只用于 AJAX 接口。
 
-接口路径与参数参考 `D:\code\sdmu-website-2\app\kbcx_api.py`。
+接口路径与参数参考抢课助手仓库的 `app/kbcx_api.py`。
 
 ## 教务原生登录
 
@@ -126,11 +140,9 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 - **下载**：全程在 IO 线程流式写入 `cache/updates/`，每 64 KB 回调一次进度，界面按百分比刷新；下载完成后校验文件大小。中途可以取消。
 - **安装权限**：`AndroidManifest.xml` 声明了 `REQUEST_INSTALL_PACKAGES`。下载完成时如果系统还没允许「安装未知应用」，对话框会变成引导页，按钮「去开启」跳到系统的「安装未知应用」开关；允许后回到 App 再点一次即可。已有权限时直接拉起系统安装器。
 - **交给系统安装**：APK 通过 `FileProvider`（`${applicationId}.updates`，只暴露 `cache/updates/`）以 `content://` 交给安装器，不落外部存储。覆盖安装会保留账号、看板顺序和设置。
-- 手动构建的调试包与 Release 包签名不同，装到同一台机器上需要先卸载旧包；从同一来源升级不会有这个问题。
+- 调试包与发布包使用同一套签名（见下文「发布签名」），可以直接覆盖安装并保留数据。
 
 > 发布新版本的流程：改 `app/build.gradle.kts` 里的 `versionCode` / `versionName` → `./gradlew.bat :app:assembleRelease` → 在 GitHub 建一个 tag 为 `v<versionName>` 的 Release 并上传 `app-release.apk`。App 只认带 `.apk` 资产的正式 Release。
-
-## 构建
 
 ## 构建
 
@@ -139,13 +151,13 @@ App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载�
 首次需要安装 37.1 平台：
 
 ```powershell
-D:\Android\sdk\cmdline-tools\latest\bin\sdkmanager.bat "platforms;android-37.1"
+<SDK 目录>\cmdline-tools\latest\bin\sdkmanager.bat "platforms;android-37.1"
 ```
 
 然后：
 
 ```powershell
-cd D:\code\管院通
+cd <项目目录>
 .\gradlew.bat :app:assembleDebug
 ```
 
@@ -176,10 +188,12 @@ app/src/main/java/com/sdmu/guanlitong/
 ├── MainActivity.kt
 ├── data/
 │   ├── Models.kt            # SchoolService / Account / LoginMode
-│   ├── ServiceCatalog.kt    # 校园服务清单（官方教务 + 抢课助手）
-│   ├── FeatureCatalog.kt    # 服务下的功能目录（课表 / 成绩 / 选课…）
+│   ├── ServiceCatalog.kt    # 校园服务清单（官方教务 + 抢课助手 + 山管app）
+│   ├── FeatureCatalog.kt    # 服务下的功能目录（课表 / 成绩 / 一卡通 / 扫一扫…）
 │   ├── DashboardStore.kt    # 概览小组件（类型 / 尺寸 / 顺序）
+│   ├── QuickActionStore.kt  # 概览快捷卡片（顺序 / 绑定入口）
 │   ├── AccountStore.kt      # 账号状态 + 加密密码
+│   ├── SessionKeeper.kt     # 三个账号回前台时统一保活
 │   ├── SettingsStore.kt     # 服务地址 + 教务数据来源
 │   ├── Secrets.kt           # Android Keystore AES/GCM
 │   ├── CookieUtils.kt       # WebView Cookie 注入 / 清理 / 登录判断
@@ -187,32 +201,45 @@ app/src/main/java/com/sdmu/guanlitong/
 │   ├── update/
 │   │   └── UpdateClient.kt  # GitHub Release 检查 / 下载 / 安装
 │   ├── widget/              # 桌面小组件（三种尺寸 + 长按编辑 + 共享下一节课）
-│   └── jwxt/
-│       ├── JwxtModels.kt    # 课表模型 + 周次/节次解析
-│       ├── JwxtClient.kt    # 官方教务课表接口（复用 WebView Cookie）
-│       ├── JwxtLoginClient.kt # 教务原生登录（csrftoken / RSA / 验证码）
-│       ├── JwxtApiClient.kt # 官方成绩 / 考试 / 选课接口
-│       ├── JwxtParsing.kt   # 教务字段解析（官方与抢课助手共用）
-│       ├── JwxtSource.kt    # 数据来源枚举 + JwxtAccess
-│       ├── JwxtDataSource.kt # 统一数据源接口与工厂
-│       ├── GrabApiClient.kt # 抢课助手站点接口（代查教务 + 抢课任务）
-│       ├── SessionRelogin.kt # 掉线自动重登（3 次指数退避）
-│       ├── CaptchaOcr.kt    # 验证码灰度/Otsu/去干扰 + ML Kit 识别
-│       └── JwxtCache.kt     # 课表本地缓存（按来源分开）
+│   ├── jwxt/
+│   │   ├── JwxtModels.kt    # 课表模型 + 周次/节次解析
+│   │   ├── JwxtClient.kt    # 官方教务课表接口（复用 WebView Cookie）
+│   │   ├── JwxtLoginClient.kt # 教务原生登录（csrftoken / RSA / 验证码）
+│   │   ├── JwxtApiClient.kt # 官方成绩 / 考试 / 选课接口
+│   │   ├── JwxtParsing.kt   # 教务字段解析（官方与抢课助手共用）
+│   │   ├── JwxtSource.kt    # 数据来源枚举 + JwxtAccess
+│   │   ├── JwxtDataSource.kt # 统一数据源接口与工厂
+│   │   ├── GrabApiClient.kt # 抢课助手站点接口（代查教务 + 抢课任务）
+│   │   ├── SessionRelogin.kt # 掉线自动重登（3 次指数退避）
+│   │   ├── CaptchaOcr.kt    # 验证码灰度/Otsu/去干扰 + ML Kit 识别
+│   │   └── JwxtCache.kt     # 课表本地缓存（按来源分开）
+│   └── sdgy/
+│       ├── SdgyClient.kt    # 山管接口（登录 / 课表 / 应用列表 / 详情）
+│       ├── SdgyProtocol.kt  # 请求加密与响应解密
+│       ├── SdgyCrypto.kt    # RSA 分段加密
+│       ├── SdgySessionManager.kt # 山管会话保活（被顶号自动重登）
+│       ├── SdgyAppCatalog.kt # api/app/list 分组解析 + 原生工具注入
+│       ├── SdgyAppsStore.kt # 应用列表离线缓存
+│       ├── SdgyTimetableSource.kt # 山管课表缓存 / 兜底 / 详情补充
+│       ├── SdgyPayApi.kt    # 一卡通余额与付款码
+│       └── SdgyPowerApi.kt  # 宿舍用电
 └── ui/
     ├── AppRoot.kt           # 三 tab + 覆盖页前进/后退动画
     ├── theme/Theme.kt       # MaterialExpressiveTheme
-    ├── overview/OverviewScreen.kt # 可自定义概览组件
+    ├── overview/            # 概览组件 + 快捷卡片编辑（QuickActionEditor 等）
     ├── features/FeaturesScreen.kt # 左侧服务栏 + 功能胶囊 + 搜索
     ├── mine/MineScreen.kt
     ├── update/UpdateUi.kt   # 更新对话框与状态文案
     ├── account/AccountScreen.kt
     ├── account/GrabLoginCard.kt # 抢课助手登录卡片（数据来源 tab / 选课页共用）
+    ├── account/SdgyLoginSection.kt # 山管app 登录区
     ├── web/ServiceWebScreen.kt
-    ├── jwxt/JwxtScreen.kt   # 原生课表页
+    ├── jwxt/JwxtScreen.kt   # 原生课表页（全 App 唯一课表页）
     ├── jwxt/JwxtDataScreens.kt # 原生成绩 / 考试 / 选课 / 教务首页
     ├── jwxt/JwxtLoginPanel.kt # 原生登录面板 / 登录弹窗
-    └── components/Components.kt
+    ├── sdgy/                # 山管应用总页 / 一卡通 / 用电 / 请销假 / 扫一扫 / 小白超人
+    └── components/          # 通用组件（FlowChipRow / RemoteIcon…）
+app/src/main/assets/editor.html # 请销假离线编辑器（含 html2canvas）
 ```
 
 ## 说明

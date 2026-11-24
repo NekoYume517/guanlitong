@@ -43,5 +43,12 @@ data class Account(
     val hasPassword: Boolean = false,
 ) {
     val displayName: String
-        get() = nickname.ifBlank { username }
+        get() = nickname.cleanAccountText().ifBlank { username.cleanAccountText() }
 }
+
+/**
+ * 服务端偶尔把姓名字段返回成 JSON null，org.json 的 optString 会把它变成字面量 "null"。
+ * 这种值不能直接显示，也不能当作有效昵称。
+ */
+internal fun String?.cleanAccountText(): String =
+    takeUnless { it.isNullOrBlank() || it.equals("null", ignoreCase = true) }.orEmpty()

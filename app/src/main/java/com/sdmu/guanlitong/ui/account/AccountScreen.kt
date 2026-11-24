@@ -199,8 +199,13 @@ fun AccountScreen(
                 HorizontalDivider()
             }
 
-            when (service.loginMode) {
-                LoginMode.CREDENTIAL -> CredentialSection(
+            when {
+                service.id == "sdgy" -> SdgyLoginSection(
+                    account = account,
+                    store = store,
+                )
+
+                service.loginMode == LoginMode.CREDENTIAL -> CredentialSection(
                     username = username,
                     onUsernameChange = { username = it },
                     password = password,
@@ -255,7 +260,7 @@ fun AccountScreen(
                     },
                 )
 
-                LoginMode.WEB -> WebSection(
+                else -> WebSection(
                     service = service,
                     serviceUrl = serviceUrl,
                     loggedIn = account.loggedIn,

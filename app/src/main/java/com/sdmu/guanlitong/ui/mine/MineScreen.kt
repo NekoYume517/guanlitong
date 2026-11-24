@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.sdmu.guanlitong.BuildConfig
 import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
@@ -129,7 +130,7 @@ fun MineScreen(
         }
         item {
             Text(
-                text = "管院通 ${versionName.ifBlank { "1.2.4" }} · 仅用于个人学习与校园生活",
+                text = "管院通 ${versionName.ifBlank { BuildConfig.VERSION_NAME }} · 仅用于个人学习与校园生活",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier

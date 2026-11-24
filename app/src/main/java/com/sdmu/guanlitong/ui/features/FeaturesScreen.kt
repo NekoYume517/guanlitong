@@ -16,7 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,15 +29,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,13 +42,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.FeatureAction
 import com.sdmu.guanlitong.data.FeatureCatalog
 import com.sdmu.guanlitong.data.SchoolService
+import com.sdmu.guanlitong.data.SdgyPage
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.targetServiceId
-import com.sdmu.guanlitong.ui.components.ServiceBadge
-import com.sdmu.guanlitong.ui.components.StatusText
+import com.sdmu.guanlitong.ui.components.FlowChipRow
+import com.sdmu.guanlitong.ui.sdgy.SdgyAppsContent
 
 /**
  * 功能页：左侧是纯文字的服务二级栏，右侧是该服务的功能胶囊（两列）。
@@ -63,8 +61,18 @@ import com.sdmu.guanlitong.ui.components.StatusText
 @Composable
 fun FeaturesScreen(
     accounts: Map<String, Account>,
+    selectedServiceId: String,
+    onSelectService: (String) -> Unit,
+    query: String,
+    onQueryChange: (String) -> Unit,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenAccount: (SchoolService) -> Unit,
+    onOpenSdgyNative: (SdgyPage) -> Unit = { _ -> },
+    onOpenSdgyWeb: (title: String, appId: String, url: String, lx: String) -> Unit = { _, _, _, _ -> },
+    /** 由 AppRoot 保存，覆盖页退出后仍保留各服务右侧面板的滚动位置。 */
+    scrollStates: MutableMap<String, ScrollState>,
+    searchScrollState: ScrollState,
+    sdgyListState: LazyListState,
     modifier: Modifier = Modifier,
     dataSourceLabel: String? = null,
     statusAccount: Account? = null,
@@ -72,9 +80,7 @@ fun FeaturesScreen(
     grabSource: Boolean = false,
 ) {
     val services = ServiceCatalog.featureServices
-    var selectedId by rememberSaveable { mutableStateOf(services.first().id) }
-    var query by rememberSaveable { mutableStateOf("") }
-    val selected = services.firstOrNull { it.id == selectedId } ?: services.first()
+    val selected = services.firstOrNull { it.id == selectedServiceId } ?: services.first()
     val account = accounts[selected.id]
 
     val keyword = query.trim()
@@ -105,14 +111,14 @@ fun FeaturesScreen(
             Spacer(Modifier.padding(top = 10.dp))
             TextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = onQueryChange,
                 placeholder = { Text("搜索所需功能") },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
+                        IconButton(onClick = { onQueryChange("") }) {
                             Icon(Icons.Outlined.Close, contentDescription = "清空搜索")
                         }
                     }
@@ -148,7 +154,7 @@ fun FeaturesScreen(
                     ServiceRailTab(
                         service = service,
                         selected = service.id == selected.id,
-                        onClick = { selectedId = service.id },
+                        onClick = { onSelectService(service.id) },
                     )
                 }
             }
@@ -164,8 +170,28 @@ fun FeaturesScreen(
                 SearchResultsPane(
                     keyword = keyword,
                     results = results,
-                    onOpenFeature = onOpenFeature,
+                    onOpenFeature = { feature ->
+                        if (feature.serviceId == "other") {
+                            val page = (feature.action as? FeatureAction.Sdgy)?.page ?: return@SearchResultsPane
+                            onOpenSdgyNative(page)
+                        } else {
+                            onOpenFeature(feature)
+                        }
+                    },
+                    scrollState = searchScrollState,
                     modifier = Modifier.weight(1f),
+                )
+            } else if (selected.id == "sdgy") {
+                SdgyAppsContent(
+                    onOpenNative = onOpenSdgyNative,
+                    onOpenWeb = onOpenSdgyWeb,
+                    onOpenAccount = { onOpenAccount(selected) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    listState = sdgyListState,
+                    showAccountCard = false,
+                    showSearch = false,
+                    externalQuery = query,
+                    flowChips = true,
                 )
             } else {
                 ServicePane(
@@ -176,6 +202,10 @@ fun FeaturesScreen(
                     grabSource = grabSource,
                     onOpenFeature = onOpenFeature,
                     onOpenAccount = onOpenAccount,
+                    onOpenSdgyNative = onOpenSdgyNative,
+                    onOpenSdgyWeb = onOpenSdgyWeb,
+                    scrollStates = scrollStates,
+                    sdgyListState = sdgyListState,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -220,82 +250,54 @@ private fun ServicePane(
     statusAccount: Account? = null,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenAccount: (SchoolService) -> Unit,
+    onOpenSdgyNative: (SdgyPage) -> Unit = { _ -> },
+    onOpenSdgyWeb: (title: String, appId: String, url: String, lx: String) -> Unit = { _, _, _, _ -> },
+    scrollStates: MutableMap<String, ScrollState>,
+    sdgyListState: LazyListState,
     modifier: Modifier = Modifier,
     grabSource: Boolean = false,
 ) {
     val features = FeatureCatalog.forService(service.id)
         .filter { grabSource || !it.grabSourceOnly }
+    val scrollState = scrollStates.getOrPut(service.id) { ScrollState(0) }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        Column(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ServiceBadge(service = service, size = 42.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = service.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = service.summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (dataSourceLabel != null && service.id == "jwxt") {
-                        Text(
-                            text = "数据来源：$dataSourceLabel",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = service.accent,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (service.requiresAccount) {
-                    val shown = statusAccount ?: account
-                    StatusText(loggedIn = shown?.loggedIn == true)
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { onOpenAccount(service) }) {
-                        Text(if (shown?.loggedIn == true) "账号" else "登录")
-                    }
-                } else {
-                    Text(
-                        text = if (service.externalPackage != null) "独立 App · 免登录" else "公开访问",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = service.accent.copy(alpha = 0.9f),
-                    )
-                }
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 120.dp),
-        ) {
-            Text(
-                text = "全部功能",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
+        if (service.id == "sdgy") {
+            // 山管app 不再单开二级页：官方功能总表直接铺在右侧面板里。
+            SdgyAppsContent(
+                onOpenNative = onOpenSdgyNative,
+                onOpenWeb = onOpenSdgyWeb,
+                onOpenAccount = { onOpenAccount(service) },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                listState = sdgyListState,
+                showAccountCard = false,
+                showSearch = false,
+                externalQuery = "",
+                flowChips = true,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
             )
-            if (features.isEmpty()) {
+        } else {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, top = 6.dp, end = 16.dp, bottom = 120.dp),
+            ) {
                 Text(
-                    text = "这个服务还没有配置功能",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "全部功能",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
-            } else {
-                FeatureChipRows(features = features, onOpenFeature = onOpenFeature)
+                if (features.isEmpty()) {
+                    Text(
+                        text = "这个服务还没有配置功能",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    FeatureChipRows(features = features, onOpenFeature = onOpenFeature)
+                }
             }
         }
     }
@@ -306,12 +308,13 @@ private fun SearchResultsPane(
     keyword: String,
     results: List<ServiceFeature>,
     onOpenFeature: (ServiceFeature) -> Unit,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(start = 16.dp, end = 16.dp, bottom = 120.dp),
     ) {
         Text(
@@ -345,20 +348,12 @@ private fun FeatureChipRows(
     features: List<ServiceFeature>,
     onOpenFeature: (ServiceFeature) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        features.chunked(2).forEach { rowFeatures ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                rowFeatures.forEach { feature ->
-                    FeatureChip(
-                        feature = feature,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onOpenFeature(feature) },
-                    )
-                }
-                if (rowFeatures.size == 1) {
-                    Spacer(Modifier.weight(1f))
-                }
-            }
+    FlowChipRow(modifier = Modifier.fillMaxWidth()) {
+        features.forEach { feature ->
+            FeatureChip(
+                feature = feature,
+                onClick = { onOpenFeature(feature) },
+            )
         }
     }
 }
@@ -366,7 +361,6 @@ private fun FeatureChipRows(
 @Composable
 private fun FeatureChip(
     feature: ServiceFeature,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val accent = ServiceCatalog.byId(feature.targetServiceId)?.accent
@@ -375,22 +369,31 @@ private fun FeatureChip(
     Surface(
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier
+        modifier = Modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier
-                .heightIn(min = 46.dp)
-                .padding(horizontal = 11.dp, vertical = 9.dp),
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 11.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = feature.icon,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(18.dp),
-            )
+            val officialIcon = com.sdmu.guanlitong.ui.components.rememberRemoteIcon(feature.iconUrl)
+            if (officialIcon != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = officialIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            } else {
+                Icon(
+                    imageVector = feature.icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
             Spacer(Modifier.width(6.dp))
             Text(
                 text = feature.title,

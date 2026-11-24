@@ -3,20 +3,21 @@ package com.sdmu.guanlitong.data.jwxt
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.ApiClient
 import com.sdmu.guanlitong.data.CookieUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * 掉线后的自动重登。
  *
  * 只在「用户没有主动退出、并且保存过密码」时生效：
  * 依次尝试 [MAX_ATTEMPTS] 次，间隔按 1s / 2s / 4s 指数退避。
- * 成功后会注入新 Cookie 并把账号标记为已登录，失败则返回 null 由页面继续提示手动登录。
+ * 成功后会注入新 Cookie 并把账号标记为已登录；失败也绝不清除登录状态，
+ * 只跳过一小段时间，等下次打开 App、进入页面或数据请求时继续重试。
  */
 class SessionRelogin(private val accounts: AccountStore) {
-
-    private val mutex = Mutex()
 
     fun serviceIdOf(source: JwxtSource): String = when (source) {
         JwxtSource.Official -> "jwxt"
@@ -28,12 +29,32 @@ class SessionRelogin(private val accounts: AccountStore) {
      *
      * @return 是否真的重新建立了会话
      */
-    suspend fun ensure(source: JwxtSource, officialUrl: String, grabUrl: String): Boolean {
-        val serviceId = serviceIdOf(source)
+    suspend fun ensure(source: JwxtSource, officialUrl: String, grabUrl: String): Boolean =
+        ensureService(serviceIdOf(source), officialUrl, grabUrl)
+
+    /**
+     * 指定账号的补登录，不依赖当前教务数据来源。
+     * 官方教务和抢课助手各自独立保活，互不影响。
+     */
+    suspend fun ensureService(
+        serviceId: String,
+        officialUrl: String,
+        grabUrl: String,
+    ): Boolean {
+        val source = if (serviceId == "grab") JwxtSource.Grab else JwxtSource.Official
         val account = accounts.accountOf(serviceId)
         if (!account.loggedIn || !account.hasPassword) return false
+        if (source == JwxtSource.Grab && grabUrl.isBlank()) return false
         if (JwxtAccess(source, officialUrl, grabUrl).cookie().isNotBlank()) return false
-        return relogin(source, officialUrl, grabUrl) != null
+
+        // 连续失败时不要每次回到前台都跑一遍验证码识别，等一会儿再试。
+        val now = System.currentTimeMillis()
+        val failedAt = lastFailures[serviceId] ?: 0L
+        if (now - failedAt < RETRY_COOLDOWN_MS) return false
+
+        val recovered = relogin(source, officialUrl, grabUrl) != null
+        if (recovered) lastFailures.remove(serviceId) else lastFailures[serviceId] = now
+        return recovered
     }
 
     suspend fun relogin(
@@ -51,7 +72,10 @@ class SessionRelogin(private val accounts: AccountStore) {
         repeat(MAX_ATTEMPTS) { attempt ->
             if (attempt > 0) delay(BASE_DELAY_MS shl (attempt - 1))
             val cookie = runCatching {
-                loginOnce(source, officialUrl, grabUrl, username, password)
+                // 调用方可能直接来自 LaunchedEffect（主线程），网络与 OCR 必须切到 IO。
+                withContext(Dispatchers.IO) {
+                    loginOnce(source, officialUrl, grabUrl, username, password)
+                }
             }.getOrNull()
             if (!cookie.isNullOrBlank()) {
                 injectCookie(source, officialUrl, grabUrl, cookie)
@@ -111,5 +135,10 @@ class SessionRelogin(private val accounts: AccountStore) {
     companion object {
         const val MAX_ATTEMPTS = 3
         private const val BASE_DELAY_MS = 1_000L
+        private const val RETRY_COOLDOWN_MS = 5 * 60_000L
+
+        /** 多个入口（前台保活、数据请求、页面进入）共用同一把锁，避免并发重登。 */
+        private val mutex = Mutex()
+        private val lastFailures = java.util.concurrent.ConcurrentHashMap<String, Long>()
     }
 }

@@ -27,6 +27,7 @@ class AccountStore(context: Context) {
         ServiceCatalog.services.forEach { service ->
             val username = prefs.getString(usernameKey(service.id), "").orEmpty()
             val nickname = prefs.getString(nicknameKey(service.id), "").orEmpty()
+                .cleanAccountText()
             val loggedIn = prefs.getBoolean(loggedInKey(service.id), false)
             val lastLogin = prefs.getLong(lastLoginKey(service.id), 0L)
             val hasPassword = !prefs.getString(passwordKey(service.id), null).isNullOrBlank()
@@ -72,7 +73,7 @@ class AccountStore(context: Context) {
     ) {
         val editor = prefs.edit()
             .putString(usernameKey(serviceId), username)
-            .putString(nicknameKey(serviceId), nickname)
+            .putString(nicknameKey(serviceId), nickname.cleanAccountText())
             .putBoolean(loggedInKey(serviceId), true)
             .putLong(lastLoginKey(serviceId), System.currentTimeMillis())
 

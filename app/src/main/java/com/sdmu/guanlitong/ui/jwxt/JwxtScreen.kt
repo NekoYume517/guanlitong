@@ -7,17 +7,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -79,6 +83,9 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.Timetable
 import com.sdmu.guanlitong.data.jwxt.WeekInfo
 import com.sdmu.guanlitong.data.jwxt.parseWeekStart
+import com.sdmu.guanlitong.data.sdgy.SdgyCourseSupplement
+import com.sdmu.guanlitong.data.sdgy.SdgyRepository
+import com.sdmu.guanlitong.data.sdgy.SdgyTimetableSource
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneId
@@ -93,6 +100,8 @@ private sealed interface TimetableState {
         val fromCache: Boolean,
         val needsLogin: Boolean = false,
         val notice: String? = null,
+        /** 当前展示的是山管课表兜底数据，不是教务缓存。 */
+        val fromSdgy: Boolean = false,
     ) : TimetableState
 
     data class Failed(val message: String, val sessionExpired: Boolean) : TimetableState
@@ -124,6 +133,8 @@ fun JwxtScreen(
     val cached = remember(origin) {
         if (origin.isBlank()) null else JwxtCache.load(context, origin)
     }
+    // 连教务数据都没有时，用山管课表撑起同一个页面；教务数据永远优先。
+    val sdgyFallback = remember { SdgyTimetableSource.toJwxtTimetable(context) }
 
     var attempt by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
@@ -136,9 +147,28 @@ fun JwxtScreen(
                     updatedAt = it.savedAt,
                     fromCache = true,
                 )
+            } ?: sdgyFallback?.let {
+                TimetableState.Ready(
+                    timetable = it,
+                    updatedAt = 0L,
+                    fromCache = true,
+                    fromSdgy = true,
+                )
             } ?: TimetableState.Loading,
         )
     }
+
+    fun fallbackState(notice: String, needsLogin: Boolean = false): TimetableState.Ready? =
+        sdgyFallback?.let {
+            TimetableState.Ready(
+                timetable = it,
+                updatedAt = 0L,
+                fromCache = true,
+                needsLogin = needsLogin,
+                notice = notice,
+                fromSdgy = true,
+            )
+        }
 
     val cookie = remember(access, refreshToken, attempt) { access.cookie() }
     val client = remember(access, cookie) { access.client(cookie) }
@@ -151,19 +181,24 @@ fun JwxtScreen(
         try {
             when {
                 origin.isBlank() -> {
-                    state = TimetableState.Failed("还没有配置${access.source.label}地址", false)
+                    state = fallbackState("还没有配置${access.source.label}地址，当前显示山管app课表")
+                        ?: TimetableState.Failed("还没有配置${access.source.label}地址", false)
                 }
 
                 cookie.isBlank() -> {
-                    val notice = if (usingGrab) {
-                        "尚未登录抢课助手，当前显示上次缓存"
-                    } else {
-                        "尚未登录教务系统，当前显示上次缓存"
+                    val notice = when {
+                        cachedState?.fromSdgy == true ->
+                            "尚未登录${if (usingGrab) "抢课助手" else "教务系统"}，当前显示山管app课表"
+                        usingGrab -> "尚未登录抢课助手，当前显示上次缓存"
+                        else -> "尚未登录教务系统，当前显示上次缓存"
                     }
                     state = cachedState?.copy(
                         fromCache = true,
                         needsLogin = true,
                         notice = notice,
+                    ) ?: fallbackState(
+                        "尚未登录${if (usingGrab) "抢课助手" else "教务系统"}，当前显示山管app课表",
+                        needsLogin = true,
                     ) ?: TimetableState.Failed(
                         if (usingGrab) {
                             "尚未登录抢课助手，请先在「教务系统 → 数据来源」里登录"
@@ -186,20 +221,39 @@ fun JwxtScreen(
                             fromCache = false,
                         )
                     } catch (e: JwxtSessionExpiredException) {
+                        val notice = if (cachedState?.fromSdgy == true) {
+                            "登录状态已失效，当前显示山管app课表"
+                        } else {
+                            "登录状态已失效，当前显示上次缓存"
+                        }
                         cachedState?.copy(
                             fromCache = true,
                             needsLogin = true,
-                            notice = "登录状态已失效，当前显示上次缓存",
-                        ) ?: TimetableState.Failed(e.message ?: "登录状态已失效", true)
+                            notice = notice,
+                        ) ?: fallbackState("登录状态已失效，当前显示山管app课表", needsLogin = true)
+                            ?: TimetableState.Failed(e.message ?: "登录状态已失效", true)
                     } catch (e: JwxtException) {
+                        val notice = if (cachedState?.fromSdgy == true) {
+                            "${e.message ?: "刷新失败"}，当前显示山管app课表"
+                        } else {
+                            e.message ?: "刷新失败，当前显示上次缓存"
+                        }
                         cachedState?.copy(
                             fromCache = true,
-                            notice = e.message ?: "刷新失败，当前显示上次缓存",
-                        ) ?: TimetableState.Failed(e.message ?: "读取课表失败", false)
+                            notice = notice,
+                        ) ?: fallbackState("${e.message ?: "刷新失败"}，当前显示山管app课表")
+                            ?: TimetableState.Failed(e.message ?: "读取课表失败", false)
                     } catch (e: Exception) {
+                        val notice = if (cachedState?.fromSdgy == true) {
+                            "读取课表失败：${e.message ?: "未知错误"}，当前显示山管app课表"
+                        } else {
+                            "读取课表失败：${e.message ?: "未知错误"}，当前显示上次缓存"
+                        }
                         cachedState?.copy(
                             fromCache = true,
-                            notice = "读取课表失败：${e.message ?: "未知错误"}，当前显示上次缓存",
+                            notice = notice,
+                        ) ?: fallbackState(
+                            "读取课表失败：${e.message ?: "未知错误"}，当前显示山管app课表",
                         ) ?: TimetableState.Failed("读取课表失败：${e.message ?: "未知错误"}", false)
                     }
                 }
@@ -260,6 +314,7 @@ fun JwxtScreen(
                     timetable = current.timetable,
                     updatedAt = current.updatedAt,
                     fromCache = current.fromCache,
+                    fromSdgy = current.fromSdgy,
                     needsLogin = current.needsLogin,
                     notice = current.notice,
                     refreshing = refreshing,
@@ -382,6 +437,7 @@ private fun TimetableContent(
     timetable: Timetable,
     updatedAt: Long,
     fromCache: Boolean,
+    fromSdgy: Boolean,
     needsLogin: Boolean,
     notice: String?,
     refreshing: Boolean,
@@ -424,6 +480,7 @@ private fun TimetableContent(
             CacheNotice(
                 notice = notice,
                 updatedAt = updatedAt,
+                fromSdgy = fromSdgy,
                 refreshing = refreshing,
                 needsLogin = needsLogin,
                 onRetry = onRetry,
@@ -477,6 +534,7 @@ private fun TimetableContent(
         CourseDetailDialog(
             course = course,
             jcTimes = timetable.jcTimes,
+            week = if (selectedWeek > 0) selectedWeek else timetable.currentWeek,
             onDismiss = { detail = null },
         )
     }
@@ -537,6 +595,7 @@ private fun SemesterCard(
 private fun CacheNotice(
     notice: String?,
     updatedAt: Long,
+    fromSdgy: Boolean,
     refreshing: Boolean,
     needsLogin: Boolean,
     onRetry: () -> Unit,
@@ -562,13 +621,21 @@ private fun CacheNotice(
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = notice ?: "当前显示本地缓存的课表",
+                    text = notice ?: if (fromSdgy) {
+                        "教务系统暂无数据，当前显示山管app课表"
+                    } else {
+                        "当前显示本地缓存的课表"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
                     text = buildString {
-                        append("更新于 ")
-                        append(formatUpdatedAt(updatedAt))
+                        if (fromSdgy) {
+                            append("数据来自山管app课表")
+                        } else {
+                            append("更新于 ")
+                            append(formatUpdatedAt(updatedAt))
+                        }
                         if (refreshing) append(" · 正在更新…")
                     },
                     style = MaterialTheme.typography.labelSmall,
@@ -903,8 +970,27 @@ private fun DayColumn(
 private fun CourseDetailDialog(
     course: Course,
     jcTimes: Map<Int, JcTime>,
+    week: Int,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val repository = remember { SdgyRepository(context) }
+    var supplement by remember(course.name, week) { mutableStateOf<SdgyCourseSupplement?>(null) }
+    var showNames by remember { mutableStateOf(false) }
+
+    LaunchedEffect(course.name, course.dayOfWeek, course.startPeriod, course.endPeriod, week) {
+        supplement = SdgyTimetableSource.loadSupplement(
+            context = context,
+            repository = repository,
+            courseName = course.name,
+            teacher = course.teacher,
+            day = course.dayOfWeek,
+            start = course.startPeriod,
+            end = course.endPeriod,
+            week = week,
+        )
+    }
+
     val periodText = if (course.startPeriod == course.endPeriod) {
         "第 ${course.startPeriod} 节"
     } else {
@@ -926,7 +1012,10 @@ private fun CourseDetailDialog(
         icon = { Icon(Icons.Outlined.School, contentDescription = null) },
         title = { Text(course.name) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 if (course.teacher.isNotBlank()) DetailRow("教师", course.teacher)
                 if (course.room.isNotBlank()) DetailRow("教室", course.room)
                 if (course.campus.isNotBlank()) DetailRow("校区", course.campus)
@@ -934,11 +1023,71 @@ private fun CourseDetailDialog(
                 DetailRow("节次", periodText)
                 if (timeText.isNotBlank()) DetailRow("时间", timeText)
                 if (course.className.isNotBlank()) DetailRow("教学班", course.className)
+
+                supplement?.let { s ->
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    Text(
+                        "山管统计",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    DetailRow("挂科率", s.failureRate)
+                    DetailRow("平均分", s.average)
+                    DetailRow("最高分", s.highest)
+                    DetailRow("上课人数", s.studentCount)
+                    if (s.genderRatio != "--") DetailRow("男女比例", s.genderRatio)
+                    if (s.classmates.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showNames = true },
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Text("上课人（${s.classmates.size}）")
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("知道了") }
         },
+    )
+
+    if (showNames) {
+        supplement?.let { s ->
+            SdgyNameListDialog(names = s.classmates, onDismiss = { showNames = false })
+        }
+    }
+}
+
+@Composable
+private fun SdgyNameListDialog(
+    names: List<Pair<String, String>>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("上课人（${names.size}）") },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                items(names) { (name, id) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        if (id.isNotBlank()) {
+                            Text(
+                                id,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
     )
 }
 

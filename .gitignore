@@ -16,3 +16,9 @@ local.properties
 # 签名密钥与密码，绝不提交
 keystore/
 keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+shot_*.txt

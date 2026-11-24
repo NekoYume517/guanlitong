@@ -1,5 +1,6 @@
 package com.sdmu.guanlitong.ui.overview
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector2D
@@ -14,10 +15,13 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -82,7 +86,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -143,6 +147,7 @@ import java.util.Locale
 fun OverviewScreen(
     accounts: Map<String, Account>,
     dashboard: DashboardStore,
+    quickActions: com.sdmu.guanlitong.data.QuickActionStore,
     jwxtBaseUrl: String,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenTimetable: () -> Unit,
@@ -161,11 +166,24 @@ fun OverviewScreen(
     }
     val today = remember { LocalDate.now(ZoneId.of("Asia/Shanghai")) }
     var galleryOpen by remember { mutableStateOf(false) }
+    val quickActionState = rememberQuickActionOverlayState()
+    val quickTargets = remember { mutableMapOf<String, QuickActionTarget>() }
+    val quickPress = remember { QuickActionPressTracker() }
+    val quickFeatureIds by quickActions.featureIds.collectAsState()
+    val sdgyRepository = remember { com.sdmu.guanlitong.data.sdgy.SdgyRepository(context) }
+    var sdgyGroups by remember {
+        mutableStateOf(com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.load(context)?.groups.orEmpty())
+    }
+    val quickFeatures = quickFeatureIds.mapNotNull { id ->
+        FeatureCatalog.byId(id) ?: sdgyGroups.asSequence().flatMap { it.apps }
+            .map(FeatureCatalog::sdgyApp).firstOrNull { it.id == id }
+    }
+    var containerOrigin by remember { mutableStateOf(Offset.Zero) }
+    val currentContainerOrigin by rememberUpdatedState(containerOrigin)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val drag = remember { DashboardDragState() }
     val previewMotion = remember { PreviewMotionState() }
     var highlightId by remember { mutableStateOf<String?>(null) }
-    var containerOrigin by remember { mutableStateOf(Offset.Zero) }
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val deleteSlop = with(density) { 16.dp.toPx() }
@@ -191,11 +209,18 @@ fun OverviewScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .onGloballyPositioned { containerOrigin = it.positionInRoot() },
+            .onGloballyPositioned { containerOrigin = it.positionInWindow() },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .then(
+                    if (quickActionState.menu != null && Build.VERSION.SDK_INT >= 31) {
+                        Modifier.blur(12.dp)
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 20.dp),
         ) {
             // 标题固定，不跟着小组件一起滚走。
@@ -209,7 +234,10 @@ fun OverviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(scrollState, enabled = drag.draggedId == null)
+                    .verticalScroll(
+                        scrollState,
+                        enabled = drag.draggedId == null && quickActionState.menu == null,
+                    )
                     .padding(top = 8.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -244,25 +272,42 @@ fun OverviewScreen(
                                 )
                             }
                             .pointerInput(item.id) {
+                                var pressedQuickTarget: QuickActionTarget? = null
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { touch ->
                                         val rect = drag.slots[item.id]
-                                        if (rect != null) {
+                                        pressedQuickTarget = rect?.let { slot ->
+                                            quickTargets.values.firstOrNull { target ->
+                                                target.widgetId == item.id &&
+                                                    target.bounds.contains(slot.topLeft + touch)
+                                            }
+                                        }
+                                        val target = pressedQuickTarget
+                                        if (target != null) {
+                                            quickPress.menuStartedDragging = true
+                                        } else if (rect != null && quickActionState.menu == null) {
                                             drag.start(item.id, currentItems, touch, rect)
-                                            haptics.performHapticFeedback(
-                                                HapticFeedbackType.LongPress
-                                            )
+                                        }
+                                        if (target != null || rect != null) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         }
                                     },
                                     onDrag = { change, amount ->
                                         change.consume()
-                                        drag.drag(amount.x, amount.y, currentItems, deleteSlop)
+                                        if (pressedQuickTarget == null && quickActionState.menu == null) {
+                                            drag.drag(amount.x, amount.y, currentItems, deleteSlop)
+                                        }
                                     },
-                                    onDragEnd = { drag.release(currentItems) },
+                                    onDragEnd = {
+                                        if (pressedQuickTarget == null) drag.release(currentItems)
+                                        pressedQuickTarget = null
+                                    },
                                     onDragCancel = {
-                                        // 手势被打断也要把预览偏移归零，否则组件会一直歪着。
-                                        drag.cancel()
-                                        previewMotion.snapAll()
+                                        if (pressedQuickTarget == null) {
+                                            drag.cancel()
+                                            previewMotion.snapAll()
+                                        }
+                                        pressedQuickTarget = null
                                     },
                                 )
                             },
@@ -297,6 +342,21 @@ fun OverviewScreen(
                                     today = today,
                                     accounts = accounts,
                                     jwxtSource = jwxtSource,
+                                    quickActions = quickFeatures,
+                                    onQuickActionPress = quickPress::down,
+                                    onOpenQuickActionMenu = { target, token ->
+                                        quickPress.longPress(token)
+                                        quickActionState.open(target, currentContainerOrigin)
+                                    },
+                                    onQuickActionPositioned = { target ->
+                                        quickTargets["${target.widgetId}/${target.index}"] = target
+                                    },
+                                    onEditQuickActions = quickActionState::editAll,
+                                    menuTargetIndex = if (quickActionState.menu?.target?.widgetId == item.id) {
+                                        quickActionState.menu?.target?.index
+                                    } else {
+                                        null
+                                    },
                                     onOpenFeature = onOpenFeature,
                                     onOpenTimetable = onOpenTimetable,
                                     onOpenAccount = onOpenAccount,
@@ -328,11 +388,12 @@ fun OverviewScreen(
                 today = today,
                 accounts = accounts,
                 jwxtSource = jwxtSource,
+                quickFeatures = quickFeatures,
                 onOpenFeature = onOpenFeature,
                 onOpenTimetable = onOpenTimetable,
                 onOpenAccount = onOpenAccount,
                 onOpenMine = onOpenMine,
-                                onCommitMove = {
+                onCommitMove = {
                     drag.commitMove(currentItems, dashboard::move)
                     previewMotion.snapAll()
                 },
@@ -389,6 +450,52 @@ fun OverviewScreen(
         }
     }
 
+    BackHandler(enabled = quickActionState.menu != null) {
+        quickActionState.dismissMenu()
+    }
+    val menu = quickActionState.menu
+    val menuSnapshot = remember(menu) { menu }
+    if (menuSnapshot != null) {
+        QuickActionContextMenu(
+            visibleState = quickActionState.menuVisible,
+            windowSize = androidx.compose.ui.unit.IntSize(
+                context.resources.displayMetrics.widthPixels,
+                context.resources.displayMetrics.heightPixels,
+            ),
+            modifier = Modifier.fillMaxSize(),
+            feature = menuSnapshot.target.feature,
+            anchor = menuSnapshot.anchor,
+            size = items.firstOrNull { it.id == menuSnapshot.target.widgetId }?.size
+                ?: WidgetSize.Medium,
+            onEdit = quickActionState::edit,
+            onDismiss = {
+                quickActionState.finishDismissMenu()
+                quickActionState.openPendingEditor()
+            },
+        )
+    }
+    if (quickActionState.editorOpen) {
+        QuickActionEditorSheet(
+            store = quickActions,
+            focusId = quickActionState.editorFocusId,
+            focusIndex = quickActionState.editorFocusIndex,
+            selectedFeatures = quickFeatures,
+            sdgyGroups = sdgyGroups,
+            loggedInServices = accounts.filterValues { it.loggedIn }.keys,
+            onRefreshSdgy = {
+                val raw = sdgyRepository.call { it.appList("1") }
+                val parsed = com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.withNativeTools(
+                    com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog.parse(raw),
+                )
+                if (parsed.isNotEmpty()) {
+                    sdgyGroups = parsed
+                    com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.save(context, raw.toString())
+                }
+                parsed
+            },
+            onDismiss = quickActionState::dismissEditor,
+        )
+    }
     if (galleryOpen) {
         ModalBottomSheet(
             onDismissRequest = { galleryOpen = false },
@@ -919,6 +1026,7 @@ private fun DraggedCardOverlay(
     today: LocalDate,
     accounts: Map<String, Account>,
     jwxtSource: JwxtSource,
+    quickFeatures: List<ServiceFeature> = FeatureCatalog.quickFeatures,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenTimetable: () -> Unit,
     onOpenAccount: (SchoolService) -> Unit,
@@ -1015,6 +1123,7 @@ private fun DraggedCardOverlay(
             today = today,
             accounts = accounts,
             jwxtSource = jwxtSource,
+            quickActions = quickFeatures,
             onOpenFeature = onOpenFeature,
             onOpenTimetable = onOpenTimetable,
             onOpenAccount = onOpenAccount,
@@ -1089,6 +1198,12 @@ private fun WidgetContent(
     today: LocalDate,
     accounts: Map<String, Account>,
     jwxtSource: JwxtSource,
+    quickActions: List<ServiceFeature>,
+    onOpenQuickActionMenu: (QuickActionTarget, Long) -> Unit = { _, _ -> },
+    onQuickActionPress: (Offset) -> Long = { 0L },
+    menuTargetIndex: Int? = null,
+    onEditQuickActions: () -> Unit = {},
+    onQuickActionPositioned: (QuickActionTarget) -> Unit = {},
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenTimetable: () -> Unit,
     onOpenAccount: (SchoolService) -> Unit,
@@ -1110,9 +1225,16 @@ private fun WidgetContent(
             onOpenTimetable = onOpenTimetable,
         )
 
-        WidgetType.QuickActions -> QuickActionsWidget(
+        WidgetType.QuickActions -> QuickActionsContent(
+            widgetId = item.id,
             size = item.size,
+            features = quickActions,
+            menuTargetIndex = menuTargetIndex,
             onOpenFeature = onOpenFeature,
+            onOpenMenu = onOpenQuickActionMenu,
+            onQuickActionPress = onQuickActionPress,
+            onEdit = onEditQuickActions,
+            onTilePositioned = onQuickActionPositioned,
         )
 
         WidgetType.Semester -> SemesterWidget(
@@ -1132,11 +1254,12 @@ private fun WidgetContent(
 }
 
 @Composable
-private fun WidgetCard(
+internal fun WidgetCard(
     title: String,
     size: WidgetSize,
     actionText: String? = null,
     onAction: (() -> Unit)? = null,
+    actionContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
@@ -1182,6 +1305,7 @@ private fun WidgetCard(
                     actionText = actionText,
                     compact = compactHeader,
                     onAction = onAction,
+                    actionContent = actionContent,
                 )
                 Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
                 content()
@@ -1197,6 +1321,7 @@ private fun WidgetTitle(
     actionText: String? = null,
     compact: Boolean = false,
     onAction: (() -> Unit)? = null,
+    actionContent: (@Composable () -> Unit)? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -1211,7 +1336,9 @@ private fun WidgetTitle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (actionText != null && onAction != null) {
+        if (actionContent != null) {
+            actionContent()
+        } else if (actionText != null && onAction != null) {
             if (compact) {
                 TextButton(
                     onClick = onAction,
@@ -1579,58 +1706,6 @@ private fun NextClassWidget(
 }
 
 // ── 快捷功能 ────────────────────────────────────────────────
-
-@Composable
-private fun QuickActionsWidget(
-    size: WidgetSize,
-    onOpenFeature: (ServiceFeature) -> Unit,
-) {
-    val features = FeatureCatalog.quickFeatures
-    WidgetCard(title = "快捷功能", size = size) {
-        when (size) {
-            WidgetSize.Small -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                features.chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { feature ->
-                            MiniActionTile(
-                                feature = feature,
-                                modifier = Modifier.weight(1f),
-                                onClick = { onOpenFeature(feature) },
-                            )
-                        }
-                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-
-            WidgetSize.Medium -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                features.forEach { feature ->
-                    QuickActionTile(
-                        feature = feature,
-                        compact = true,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onOpenFeature(feature) },
-                    )
-                }
-            }
-
-            WidgetSize.Large -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                features.chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { feature ->
-                            QuickActionCard(
-                                feature = feature,
-                                modifier = Modifier.weight(1f),
-                                onClick = { onOpenFeature(feature) },
-                            )
-                        }
-                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun MiniActionTile(
@@ -2123,6 +2198,7 @@ private fun WidgetPreview(
                 today = today,
                 accounts = accounts,
                 jwxtSource = jwxtSource,
+                quickActions = FeatureCatalog.quickFeatures,
                 onOpenFeature = {},
                 onOpenTimetable = {},
                 onOpenAccount = {},
@@ -2213,7 +2289,7 @@ private fun termLabel(timetable: Timetable): String =
     }
 
 @Composable
-private fun accentOf(feature: ServiceFeature): Color =
+internal fun accentOf(feature: ServiceFeature): Color =
     ServiceCatalog.byId(feature.targetServiceId)?.accent
         ?: MaterialTheme.colorScheme.primary
 

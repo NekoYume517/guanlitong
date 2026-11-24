@@ -2,6 +2,8 @@ package com.sdmu.guanlitong.data
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.ui.graphics.Color
 
@@ -29,15 +31,34 @@ object ServiceCatalog {
             icon = Icons.Outlined.Bolt,
             accent = Color(0xFFF08A24),
         ),
+        SchoolService(
+            id = "sdgy",
+            name = "山管app",
+            summary = "移动校园 · 统一身份认证",
+            defaultUrl = "http://222.206.86.42:8081",
+            loginMode = LoginMode.CREDENTIAL,
+            icon = Icons.Outlined.PhoneAndroid,
+            accent = Color(0xFF1E9E6A),
+        ),
+        SchoolService(
+            id = "other",
+            name = "其他",
+            summary = "扫一扫 · 小白超人",
+            defaultUrl = "",
+            loginMode = LoginMode.WEB,
+            icon = Icons.Outlined.MoreHoriz,
+            accent = Color(0xFF7657A5),
+            requiresAccount = false,
+        ),
     )
 
-    /** 「功能」页左侧二级栏展示的服务：教务数据来源可切换，抢课助手不单独占 tab。 */
+    /** 「功能」页左侧：教务系统、山管 App、其他；后两者互不混入原生工具。 */
     val featureServices: List<SchoolService>
-        get() = services.filter { it.id == "jwxt" }
+        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" || it.id == "other" }
 
-    /** 「我的」与概览「账号状态」只展示这一个账号入口；抢课助手只作为数据源。 */
+    /** 「我的」与概览「账号状态」展示需要独立登录的服务；抢课助手只作为数据源。 */
     val accountServices: List<SchoolService>
-        get() = services.filter { it.id == "jwxt" }
+        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" }
 
     fun byId(id: String): SchoolService? = services.firstOrNull { it.id == id }
 }
