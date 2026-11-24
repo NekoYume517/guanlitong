@@ -113,9 +113,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -1061,7 +1066,7 @@ private fun EmptyWidgets(onAddWidget: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "点「+」从底部面板挑选今日课程、快捷功能、教务概览或账号状态。",
+                text = "点「+」从底部面板挑选今日课程、下一节课、快捷功能、教务概览或账号状态。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1088,6 +1093,14 @@ private fun WidgetContent(
             cached = cached,
             today = today,
             size = item.size,
+            onOpenTimetable = onOpenTimetable,
+        )
+
+        WidgetType.NextClass -> NextClassWidget(
+            cached = cached,
+            size = item.size,
+            accounts = accounts,
+            jwxtSource = jwxtSource,
             onOpenTimetable = onOpenTimetable,
         )
 
@@ -1325,6 +1338,318 @@ private fun TodayCourseRow(course: Course, timeLabel: String?) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+// ── 下一节课 ────────────────────────────────────────────────
+
+private val ShanghaiZone: ZoneId = ZoneId.of("Asia/Shanghai")
+
+/** 当前时间；进入页面后每 30 秒刷新一次，「下一节课」不会停在进入页面那一刻。 */
+@Composable
+private fun rememberNow(): LocalDateTime {
+    var now by remember { mutableStateOf(LocalDateTime.now(ShanghaiZone)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            now = LocalDateTime.now(ShanghaiZone)
+        }
+    }
+    return now
+}
+
+/** 从缓存课表里挑出来的一节课。 */
+private data class UpcomingClass(
+    val course: Course,
+    val date: LocalDate,
+    val start: LocalTime?,
+    val end: LocalTime?,
+    val isOngoing: Boolean,
+    val minutesUntil: Long?,
+    val isToday: Boolean,
+) {
+    val timeLabel: String
+        get() = when {
+            start != null && end != null -> "${formatClock(start)}–${formatClock(end)}"
+            start != null -> formatClock(start)
+            else -> "${course.startPeriod}–${course.endPeriod} 节"
+        }
+}
+
+/**
+ * 按当前时间找接下来要上的课：正在上的排在前面，然后是今天剩下的、再往后一周。
+ *
+ * 缓存里存的是保存那一刻的周次（`currentWeek`），这里用缓存时间反推每个日期属于第几周，
+ * 缓存放了几天也不会把课表算错位。
+ */
+private fun upcomingClasses(
+    timetable: Timetable,
+    cachedAt: Long,
+    now: LocalDateTime,
+    limit: Int = 2,
+): List<UpcomingClass> {
+    val today = now.toLocalDate()
+    val baseDate = if (cachedAt > 0) {
+        Instant.ofEpochMilli(cachedAt).atZone(ShanghaiZone).toLocalDate()
+    } else {
+        today
+    }
+    val baseMonday = baseDate.minusDays((baseDate.dayOfWeek.value - 1).toLong())
+
+    fun weekOf(date: LocalDate): Int {
+        val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
+        return timetable.currentWeek + ChronoUnit.WEEKS.between(baseMonday, monday).toInt()
+    }
+
+    val result = mutableListOf<UpcomingClass>()
+    for (offset in 0L..6L) {
+        val date = today.plusDays(offset)
+        val courses = timetable.coursesInWeek(weekOf(date))
+            .filter { it.dayOfWeek == date.dayOfWeek.value }
+            .sortedBy { it.startPeriod }
+        for (course in courses) {
+            val start = parseClock(timetable.jcTimes[course.startPeriod]?.start)
+            val end = parseClock(timetable.jcTimes[course.endPeriod]?.end)
+            val startsAt = start?.let { date.atTime(it) }
+            val endsAt = end?.let { date.atTime(it) }
+            val ongoing = startsAt != null && endsAt != null &&
+                !now.isBefore(startsAt) && now.isBefore(endsAt)
+            // 缓存里缺节次时间时（jcTimes 为空），按节次顺序兜底成「还没上」。
+            val upcoming = startsAt == null || now.isBefore(startsAt)
+            if (!ongoing && !upcoming) continue
+            result += UpcomingClass(
+                course = course,
+                date = date,
+                start = start,
+                end = end,
+                isOngoing = ongoing,
+                minutesUntil = startsAt?.let { Duration.between(now, it).toMinutes().coerceAtLeast(0) },
+                isToday = offset == 0L,
+            )
+            if (result.size >= limit) return result
+        }
+    }
+    return result
+}
+
+private fun parseClock(raw: String?): LocalTime? {
+    val text = raw?.trim().orEmpty()
+    if (text.isBlank()) return null
+    val parts = text.split(':')
+    if (parts.size < 2) return null
+    return runCatching { LocalTime.of(parts[0].toInt(), parts[1].toInt()) }.getOrNull()
+}
+
+private fun formatClock(time: LocalTime): String =
+    String.format(Locale.CHINA, "%02d:%02d", time.hour, time.minute)
+
+private fun dayPrefix(item: UpcomingClass, today: LocalDate): String = when {
+    item.date == today -> ""
+    item.date == today.plusDays(1) -> "明天"
+    else -> "${item.date.monthValue}/${item.date.dayOfMonth}"
+}
+
+private fun countdownLabel(item: UpcomingClass): String = when {
+    item.isOngoing -> "正在上课"
+    item.minutesUntil == null -> "待上课"
+    item.minutesUntil <= 0L -> "马上开始"
+    item.minutesUntil < 60L -> "${item.minutesUntil} 分钟后"
+    else -> "还有 ${item.minutesUntil / 60} 小时 ${item.minutesUntil % 60} 分"
+}
+
+/**
+ * 「下一节课」：小号显示最近一节，中号显示接下来两节（第一节为主）。
+ *
+ * 数据一律来自课表缓存，所以卡片底部标明「使用缓存」；当前来源的账号没有登录时
+ * 再加一枚「登录失效」，提醒需要重新登录才能刷新课表。
+ */
+@Composable
+private fun NextClassWidget(
+    cached: CachedTimetable?,
+    size: WidgetSize,
+    accounts: Map<String, Account>,
+    jwxtSource: JwxtSource,
+    onOpenTimetable: () -> Unit,
+) {
+    val timetable = cached?.timetable
+    val now = rememberNow()
+    val upcoming = remember(timetable, cached?.savedAt, now) {
+        timetable?.let { upcomingClasses(it, cached?.savedAt ?: 0L, now, limit = 2) }.orEmpty()
+    }
+    val account = accounts[if (jwxtSource == JwxtSource.Grab) "grab" else "jwxt"]
+    val sessionLost = account?.loggedIn != true
+    val today = now.toLocalDate()
+
+    WidgetCard(
+        title = "下一节课",
+        size = size,
+        actionText = if (size == WidgetSize.Small) null else "打开课表",
+        onAction = if (size == WidgetSize.Small) null else onOpenTimetable,
+    ) {
+        when {
+            timetable == null -> {
+                if (size == WidgetSize.Small) {
+                    Text("—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "打开一次课表后显示",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(
+                        text = "还没有课表缓存。打开课表登录一次后，这里会显示接下来要上的课。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            upcoming.isEmpty() -> {
+                if (size == WidgetSize.Small) {
+                    Text("没课", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "接下来一周没有课",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(
+                        text = "接下来一周没有课。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            size == WidgetSize.Small -> {
+                val next = upcoming.first()
+                Text(
+                    text = if (next.isOngoing) "上课中" else next.start?.let { formatClock(it) } ?: "下一节",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Text(
+                    text = next.course.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = buildList {
+                        dayPrefix(next, today).takeIf { it.isNotBlank() }?.let(::add)
+                        next.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
+                        if (next.isOngoing) add(next.timeLabel) else add(countdownLabel(next))
+                        add(if (sessionLost) "登录失效" else "使用缓存")
+                    }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (sessionLost) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            else -> {
+                val first = upcoming.first()
+                val second = upcoming.getOrNull(1)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(9.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                        ) {
+                            Text(
+                                text = listOf(dayPrefix(first, today), first.timeLabel)
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" "),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = first.course.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = buildList {
+                                    first.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
+                                    add(countdownLabel(first))
+                                }.joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    if (second != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = buildList {
+                                    add(second.course.name)
+                                    second.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
+                                }.joinToString(" · "),
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = buildList {
+                                    dayPrefix(second, today).takeIf { it.isNotBlank() }?.let(::add)
+                                    add(second.start?.let { formatClock(it) } ?: second.timeLabel)
+                                    add(countdownLabel(second))
+                                }.joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "接下来没有别的课了",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row {
+                        if (sessionLost) {
+                            Text(
+                                text = "登录失效",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        Text(
+                            text = "使用缓存" + (cached?.savedAt?.takeIf { it > 0 }?.let {
+                                " · ${formatUpdatedAt(it)} 更新"
+                            } ?: ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1820,16 +2145,19 @@ private fun WidgetGallery(
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 WidgetType.entries.forEach { type ->
-                                    WidgetPreview(
-                                        type = type,
-                                        size = size,
-                                        width = previewWidth,
-                                        cached = cached,
-                                        today = today,
-                                        accounts = accounts,
-                                        jwxtSource = jwxtSource,
-                                        onAdd = { onAdd(type, size) },
-                                    )
+                                    // 有的功能只支持部分尺寸（比如「下一节课」只做小号和中号）。
+                                    if (size in type.sizes) {
+                                        WidgetPreview(
+                                            type = type,
+                                            size = size,
+                                            width = previewWidth,
+                                            cached = cached,
+                                            today = today,
+                                            accounts = accounts,
+                                            jwxtSource = jwxtSource,
+                                            onAdd = { onAdd(type, size) },
+                                        )
+                                    }
                                 }
                             }
                         }

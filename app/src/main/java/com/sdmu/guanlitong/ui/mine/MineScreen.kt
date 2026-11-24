@@ -129,8 +129,7 @@ fun MineScreen(
         }
         item {
             Text(
-                text = "管院通 ${versionName.ifBlank { "1.2.3" }} · 仅用于个人学习与校园生活" +
-                    " · 源码与更新在 GitHub",
+                text = "管院通 ${versionName.ifBlank { "1.2.3" }} · 仅用于个人学习与校园生活",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier

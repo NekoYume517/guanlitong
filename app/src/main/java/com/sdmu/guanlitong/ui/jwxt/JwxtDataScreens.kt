@@ -1821,7 +1821,7 @@ fun JwxtHubScreen(
                         Text(
                             text = when (access.source) {
                                 JwxtSource.Official -> "直接调用教务接口，数据与网页版一致"
-                                JwxtSource.Grab -> "经抢课助手代查课表、成绩与选课数据"
+                                JwxtSource.Grab -> "课表、成绩与选课数据由抢课助手提供"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

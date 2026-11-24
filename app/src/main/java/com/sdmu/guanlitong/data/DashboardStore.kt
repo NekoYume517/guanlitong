@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,24 +15,37 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** 概览页小组件的功能类型。 */
-enum class WidgetType(
-    val key: String,
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-) {
-    TodayCourses("today_courses", "今日课程", "今天要上的课与时间", Icons.Outlined.CalendarMonth),
-    QuickActions("quick_actions", "快捷功能", "课表、成绩、选课等常用入口", Icons.Outlined.Apps),
-    Semester("semester", "教务概览", "当前学期、周次与本周课程", Icons.Outlined.School),
-    Accounts("accounts", "账号状态", "教务系统的登录情况", Icons.Outlined.Person),
-}
-
 /** 同一个功能可以按三种尺寸摆放，尺寸只影响卡片的信息密度。 */
 enum class WidgetSize(val key: String, val label: String) {
     Small("small", "小号"),
     Medium("medium", "中号"),
     Large("large", "大号"),
+}
+
+/**
+ * 概览页小组件的功能类型。
+ *
+ * [sizes] 是这类组件支持的尺寸：「下一节课」只做小号和中号，
+ * 添加面板里不会给它生成大号预览。
+ */
+enum class WidgetType(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val sizes: Set<WidgetSize> = WidgetSize.entries.toSet(),
+) {
+    TodayCourses("today_courses", "今日课程", "今天要上的课与时间", Icons.Outlined.CalendarMonth),
+    NextClass(
+        key = "next_class",
+        title = "下一节课",
+        subtitle = "按当前时间显示接下来要上的课",
+        icon = Icons.Outlined.Schedule,
+        sizes = setOf(WidgetSize.Small, WidgetSize.Medium),
+    ),
+    QuickActions("quick_actions", "快捷功能", "课表、成绩、选课等常用入口", Icons.Outlined.Apps),
+    Semester("semester", "教务概览", "当前学期、周次与本周课程", Icons.Outlined.School),
+    Accounts("accounts", "账号状态", "教务系统的登录情况", Icons.Outlined.Person),
 }
 
 /** 概览页上的一块小组件。同一个功能可以用不同尺寸出现多次，所以用 id 区分。 */

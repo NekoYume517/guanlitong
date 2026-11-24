@@ -12,7 +12,7 @@ enum class JwxtSource(val key: String, val label: String, val hint: String) {
     Grab(
         key = "grab",
         label = "抢课助手",
-        hint = "经 jwxt.bansonic.top 代查，需要登录抢课助手并配置教务账号",
+        hint = "需要登录抢课助手并配置教务账号",
     ),
     ;
 
