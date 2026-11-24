@@ -16,7 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.sdmu.guanlitong.data.update.UpdateClient
 import com.sdmu.guanlitong.data.update.UpdateInfo
 import java.io.File
 
@@ -60,7 +62,7 @@ fun UpdateDialog(
                                 .verticalScroll(rememberScrollState()),
                         ) {
                             Text(
-                                text = state.info.notes,
+                                text = cleanNotes(state.info.notes),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -115,27 +117,38 @@ fun UpdateDialog(
             )
         }
 
-        is UpdateState.Ready -> AlertDialog(
+        is UpdateState.Ready -> {
+            // 权限可能在用户去过系统设置后已经打开，这里每次显示都重新判断。
+            val canInstall = UpdateClient.canInstall(LocalContext.current)
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                icon = { Icon(Icons.Outlined.SystemUpdate, contentDescription = null) },
+                title = { Text(if (canInstall) "下载完成" else "需要允许安装应用") },
+                text = {
+                    Text(
+                        text = if (canInstall) {
+                            "安装包已下载到本地缓存。点「安装」交给系统安装器，安装时会覆盖当前版本，账号与设置都会保留。"
+                        } else {
+                            "Android 要求你允许本应用安装更新包。点「安装」会打开系统的「安装未知应用」开关，" +
+                                "允许「管院通」之后回到这里再点一次即可。"
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = onInstall) { Text("安装") }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismiss) { Text("稍后") }
+                },
+            )
+        }
+
+        is UpdateState.UpToDate -> AlertDialog(
             onDismissRequest = onDismiss,
-            icon = { Icon(Icons.Outlined.SystemUpdate, contentDescription = null) },
-            title = { Text(if (state.needsPermission) "需要允许安装应用" else "下载完成") },
-            text = {
-                Text(
-                    text = if (state.needsPermission) {
-                        "Android 要求你允许本应用安装更新包。点下面的按钮打开系统开关，" +
-                            "允许「管院通」安装未知应用后回到这里再点一次安装。"
-                    } else {
-                        "安装包已下载到本地缓存。点「安装」交给系统安装器，安装时会覆盖当前版本，账号与设置都会保留。"
-                    },
-                )
-            },
+            title = { Text("已是最新版本") },
+            text = { Text("当前版本已经是 GitHub 上最新的正式 Release。") },
             confirmButton = {
-                TextButton(onClick = onInstall) {
-                    Text(if (state.needsPermission) "去开启" else "安装")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) { Text("稍后") }
+                TextButton(onClick = onDismiss) { Text("好") }
             },
         )
 
@@ -171,3 +184,9 @@ private fun formatSize(bytes: Long): String {
     val mb = bytes / (1024.0 * 1024.0)
     return if (mb >= 1.0) String.format("%.1f MB", mb) else "${bytes / 1024} KB"
 }
+
+/** Release 说明里常有 Markdown 标题，对话框不渲染 Markdown，去掉行首的 # 更好读。 */
+private fun cleanNotes(raw: String): String =
+    raw.lineSequence()
+        .joinToString("\n") { line -> line.replaceFirst(Regex("^#{1,6}\\s+"), "") }
+        .trim()
