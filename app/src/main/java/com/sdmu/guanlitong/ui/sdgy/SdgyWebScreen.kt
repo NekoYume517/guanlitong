@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,14 +77,18 @@ fun SdgyWebScreen(
     modifier: Modifier = Modifier,
 ) {
     val repository = rememberSdgyRepository()
+    val context = LocalContext.current
 
     var resolvedUrl by remember(title, appId, url, lx) { mutableStateOf<String?>(null) }
     var auth by remember(title, appId, url, lx) { mutableStateOf<SdgyWebAuth?>(null) }
     var loadingError by remember { mutableStateOf<String?>(null) }
     var retryToken by remember { mutableIntStateOf(0) }
+    // 网页内部跳转后的真实地址，供右上角「浏览器打开」使用。
+    var currentUrl by remember(title, appId, url, lx) { mutableStateOf("") }
 
     LaunchedEffect(title, appId, url, lx, retryToken) {
         resolvedUrl = null
+        currentUrl = ""
         loadingError = null
         try {
             val credentials = repository.call(forceCheck = true) { it.webAuth() }
@@ -105,6 +110,7 @@ fun SdgyWebScreen(
             } else {
                 auth = credentials
                 resolvedUrl = target
+                currentUrl = target
             }
         } catch (e: CancellationException) {
             throw e
@@ -123,6 +129,26 @@ fun SdgyWebScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val target = currentUrl
+                            if (target.isNotBlank()) {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(target)),
+                                    )
+                                }
+                            }
+                        },
+                        enabled = currentUrl.isNotBlank(),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = "在浏览器中打开",
+                        )
                     }
                 },
             )
@@ -159,6 +185,7 @@ fun SdgyWebScreen(
                         target = target,
                         auth = auth,
                         onBack = onBack,
+                        onUrlChanged = { currentUrl = it },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -173,6 +200,7 @@ private fun SdgyWebView(
     target: String,
     auth: SdgyWebAuth?,
     onBack: () -> Unit,
+    onUrlChanged: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -242,12 +270,23 @@ private fun SdgyWebView(
                             super.onPageStarted(view, url, favicon)
                             progress = 5
                             pageError = null
+                            url?.let(onUrlChanged)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             progress = 100
+                            url?.let(onUrlChanged)
                             if (auth != null) applyWebCookies(auth, target)
+                        }
+
+                        override fun doUpdateVisitedHistory(
+                            view: WebView?,
+                            url: String?,
+                            isReload: Boolean,
+                        ) {
+                            super.doUpdateVisitedHistory(view, url, isReload)
+                            url?.let(onUrlChanged)
                         }
 
                         override fun onReceivedError(

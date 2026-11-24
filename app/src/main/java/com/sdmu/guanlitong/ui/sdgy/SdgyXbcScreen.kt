@@ -8,6 +8,7 @@ import android.content.Intent
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -37,6 +38,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
@@ -238,6 +240,16 @@ fun SdgyXbcScreen(
                 }
                 IconButton(onClick = { startScan() }) {
                     Icon(Icons.Outlined.QrCodeScanner, contentDescription = "扫码开锁")
+                }
+                IconButton(
+                    onClick = {
+                        val target = webRef?.url ?: XBC_BASE
+                        runCatching {
+                            appContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                        }
+                    },
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器中打开")
                 }
                 TextButton(onClick = { showPermissions = true }) { Text("权限") }
             }
