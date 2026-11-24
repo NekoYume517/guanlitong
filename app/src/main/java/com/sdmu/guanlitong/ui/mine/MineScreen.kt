@@ -129,7 +129,7 @@ fun MineScreen(
         }
         item {
             Text(
-                text = "管院通 ${versionName.ifBlank { "1.2.3" }} · 仅用于个人学习与校园生活",
+                text = "管院通 ${versionName.ifBlank { "1.2.4" }} · 仅用于个人学习与校园生活",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="250dp"
+    android:layout_height="110dp"
+    android:background="@drawable/desktop_widget_preview_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="下一节课"
+            android:textColor="#1B1B21"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="长按编辑"
+            android:textColor="#405AA9"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:text="10:25 · 图像处理技术"
+        android:textColor="#1B1B21"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:maxLines="1" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="正在上课 · @明远楼 C103"
+        android:textColor="#575C6E"
+        android:textSize="11sp" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:text="14:00 · 单片机与智能控制"
+        android:textColor="#1B1B21"
+        android:textSize="13sp"
+        android:maxLines="1" />
+</LinearLayout>

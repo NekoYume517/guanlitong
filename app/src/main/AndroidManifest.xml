@@ -37,6 +37,43 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".widget.DesktopWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.GuanLiTong" />
+        <receiver
+            android:name=".widget.SmallDesktopWidgetReceiver"
+            android:exported="true"
+            android:label="管院通 · 小号">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/desktop_widget_small" />
+        </receiver>
+        <receiver
+            android:name=".widget.MediumDesktopWidgetReceiver"
+            android:exported="true"
+            android:label="管院通 · 中号">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/desktop_widget_medium" />
+        </receiver>
+        <receiver
+            android:name=".widget.LargeDesktopWidgetReceiver"
+            android:exported="true"
+            android:label="管院通 · 大号">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/desktop_widget_large" />
+        </receiver>
+        <receiver android:name=".widget.DesktopWidgetUpdateReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.sdmu.guanlitong.widget.REFRESH" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

@@ -2,6 +2,7 @@ package com.sdmu.guanlitong.data
 
 import android.content.Context
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
+import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -9,7 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /** 服务地址、教务数据来源等非敏感设置。 */
 class SettingsStore(context: Context) {
 
-    private val prefs = context.applicationContext
+    private val appContext = context.applicationContext
+    private val prefs = appContext
         .getSharedPreferences("guanlitong_settings", Context.MODE_PRIVATE)
 
     private val _urls = MutableStateFlow(loadUrls())
@@ -23,6 +25,7 @@ class SettingsStore(context: Context) {
     fun setJwxtSource(source: JwxtSource) {
         prefs.edit().putString(SOURCE_JWXT, source.key).apply()
         _jwxtSource.value = source
+        refreshDesktopWidgets(appContext)
     }
 
     private fun loadUrls(): Map<String, String> = buildMap {
@@ -42,11 +45,13 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(urlKey(serviceId), cleaned).apply()
         }
         _urls.value = loadUrls()
+        refreshDesktopWidgets(appContext)
     }
 
     fun resetUrl(serviceId: String) {
         prefs.edit().remove(urlKey(serviceId)).apply()
         _urls.value = loadUrls()
+        refreshDesktopWidgets(appContext)
     }
 
     private fun urlKey(id: String) = "url_$id"

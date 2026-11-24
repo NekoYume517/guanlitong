@@ -7,8 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import com.sdmu.guanlitong.data.AppRepository
 import com.sdmu.guanlitong.ui.AppRoot
 import com.sdmu.guanlitong.ui.theme.GuanLiTongTheme
+import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 
 class MainActivity : ComponentActivity() {
+
+    override fun onResume() {
+        super.onResume()
+        refreshDesktopWidgets(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

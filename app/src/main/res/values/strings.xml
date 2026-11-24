@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">管院通</string>
+    <string name="desktop_widget_small_description">小号 · 2×2，长按可编辑卡片内容</string>
+    <string name="desktop_widget_medium_description">中号 · 3×2，长按可编辑卡片内容</string>
+    <string name="desktop_widget_large_description">大号 · 3×4，长按可编辑卡片内容</string>
 </resources>

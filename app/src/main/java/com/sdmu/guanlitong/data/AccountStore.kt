@@ -2,6 +2,7 @@ package com.sdmu.guanlitong.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * 需要自动登录的服务（抢课助手）会额外用 Keystore 加密保存密码。
  */
 class AccountStore(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val prefs: SharedPreferences = context.applicationContext
         .getSharedPreferences("guanlitong_accounts", Context.MODE_PRIVATE)
@@ -45,6 +48,7 @@ class AccountStore(context: Context) {
 
     private fun refresh() {
         _accounts.value = loadAll()
+        refreshDesktopWidgets(appContext)
     }
 
     fun accountOf(serviceId: String): Account =

@@ -26,8 +26,8 @@ android {
         applicationId = "com.sdmu.guanlitong"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.2.3"
+        versionCode = 7
+        versionName = "1.2.4"
     }
 
     signingConfigs {
@@ -85,6 +85,15 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    implementation("androidx.glance:glance-appwidget:1.2.0") {
+        version { strictly("1.2.0") }
+    }
+    implementation("androidx.glance:glance:1.2.0") {
+        version { strictly("1.2.0") }
+    }
+    implementation("androidx.glance:glance-material3:1.2.0") {
+        version { strictly("1.2.0") }
+    }
 
     // 教务系统验证码识别：ML Kit 离线文字识别（Latin 模型，打包进 APK，不依赖 Google Play 服务）
     implementation("com.google.mlkit:text-recognition:16.0.1")

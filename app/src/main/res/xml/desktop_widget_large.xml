@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/desktop_widget_large_description"
+    android:previewLayout="@layout/desktop_widget_preview_large"
+    android:initialLayout="@layout/desktop_widget_loading"
+    android:minWidth="250dp"
+    android:minHeight="250dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="4"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="250dp"
+    android:maxResizeWidth="250dp"
+    android:maxResizeHeight="250dp"
+    android:resizeMode="none"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen"
+    android:configure="com.sdmu.guanlitong.widget.DesktopWidgetConfigActivity"
+    android:widgetFeatures="reconfigurable" />

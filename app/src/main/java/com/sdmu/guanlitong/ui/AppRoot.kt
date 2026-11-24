@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -99,6 +100,8 @@ fun AppRoot(repository: AppRepository) {
     val jwxtBaseUrl = access.origin
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    // 放在覆盖页动画外：打开子页面后概览被移出组合，滚动位置也不能随之销毁。
+    val overviewScrollState = rememberScrollState()
     var overlay by remember { mutableStateOf<Dest?>(null) }
     // +1 前进（页面从右侧滑入），-1 后退（页面向右滑出）。
     var pageDirection by remember { mutableIntStateOf(1) }
@@ -323,6 +326,7 @@ fun AppRoot(repository: AppRepository) {
                                     onOpenFeatures = { tab = 1 },
                                     onOpenMine = { tab = 2 },
                                     jwxtSource = jwxtSource,
+                                    scrollState = overviewScrollState,
                                 )
 
                                 1 -> FeaturesScreen(

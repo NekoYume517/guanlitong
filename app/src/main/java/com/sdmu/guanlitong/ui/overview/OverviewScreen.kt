@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -107,6 +108,11 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.Timetable
 import com.sdmu.guanlitong.ui.components.ServiceBadge
 import com.sdmu.guanlitong.ui.components.StatusDot
+import com.sdmu.guanlitong.widget.UpcomingClass
+import com.sdmu.guanlitong.widget.countdownLabel
+import com.sdmu.guanlitong.widget.dayPrefix
+import com.sdmu.guanlitong.widget.formatClock
+import com.sdmu.guanlitong.widget.nextClassSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -145,6 +151,7 @@ fun OverviewScreen(
     onOpenMine: () -> Unit,
     modifier: Modifier = Modifier,
     jwxtSource: JwxtSource = JwxtSource.Official,
+    scrollState: ScrollState = rememberScrollState(),
 ) {
     val context = LocalContext.current
     val items by dashboard.items.collectAsState()
@@ -155,7 +162,6 @@ fun OverviewScreen(
     val today = remember { LocalDate.now(ZoneId.of("Asia/Shanghai")) }
     var galleryOpen by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scrollState = rememberScrollState()
     val drag = remember { DashboardDragState() }
     val previewMotion = remember { PreviewMotionState() }
     var highlightId by remember { mutableStateOf<String?>(null) }
@@ -1134,6 +1140,7 @@ private fun WidgetCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
+    val compactHeader = size != WidgetSize.Small
     Surface(
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1162,14 +1169,21 @@ private fun WidgetCard(
                 }
             }
         } else {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(
+                modifier = if (compactHeader) {
+                    Modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 14.dp)
+                } else {
+                    Modifier.padding(18.dp)
+                },
+            ) {
                 WidgetTitle(
                     title = title,
                     size = size,
                     actionText = actionText,
+                    compact = compactHeader,
                     onAction = onAction,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
                 content()
             }
         }
@@ -1181,6 +1195,7 @@ private fun WidgetTitle(
     title: String,
     size: WidgetSize,
     actionText: String? = null,
+    compact: Boolean = false,
     onAction: (() -> Unit)? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1197,7 +1212,17 @@ private fun WidgetTitle(
             overflow = TextOverflow.Ellipsis,
         )
         if (actionText != null && onAction != null) {
-            TextButton(onClick = onAction) { Text(actionText) }
+            if (compact) {
+                TextButton(
+                    onClick = onAction,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    Text(text = actionText, style = MaterialTheme.typography.labelLarge)
+                }
+            } else {
+                TextButton(onClick = onAction) { Text(actionText) }
+            }
         }
     }
 }
@@ -1344,118 +1369,16 @@ private fun TodayCourseRow(course: Course, timeLabel: String?) {
 
 // ── 下一节课 ────────────────────────────────────────────────
 
-private val ShanghaiZone: ZoneId = ZoneId.of("Asia/Shanghai")
-
-/** 当前时间；进入页面后每 30 秒刷新一次，「下一节课」不会停在进入页面那一刻。 */
 @Composable
 private fun rememberNow(): LocalDateTime {
-    var now by remember { mutableStateOf(LocalDateTime.now(ShanghaiZone)) }
+    var now by remember { mutableStateOf(LocalDateTime.now(com.sdmu.guanlitong.widget.CampusZone)) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000)
-            now = LocalDateTime.now(ShanghaiZone)
+            now = LocalDateTime.now(com.sdmu.guanlitong.widget.CampusZone)
         }
     }
     return now
-}
-
-/** 从缓存课表里挑出来的一节课。 */
-private data class UpcomingClass(
-    val course: Course,
-    val date: LocalDate,
-    val start: LocalTime?,
-    val end: LocalTime?,
-    val isOngoing: Boolean,
-    val minutesUntil: Long?,
-    val isToday: Boolean,
-) {
-    val timeLabel: String
-        get() = when {
-            start != null && end != null -> "${formatClock(start)}–${formatClock(end)}"
-            start != null -> formatClock(start)
-            else -> "${course.startPeriod}–${course.endPeriod} 节"
-        }
-}
-
-/**
- * 按当前时间找接下来要上的课：正在上的排在前面，然后是今天剩下的、再往后一周。
- *
- * 缓存里存的是保存那一刻的周次（`currentWeek`），这里用缓存时间反推每个日期属于第几周，
- * 缓存放了几天也不会把课表算错位。
- */
-private fun upcomingClasses(
-    timetable: Timetable,
-    cachedAt: Long,
-    now: LocalDateTime,
-    limit: Int = 2,
-): List<UpcomingClass> {
-    val today = now.toLocalDate()
-    val baseDate = if (cachedAt > 0) {
-        Instant.ofEpochMilli(cachedAt).atZone(ShanghaiZone).toLocalDate()
-    } else {
-        today
-    }
-    val baseMonday = baseDate.minusDays((baseDate.dayOfWeek.value - 1).toLong())
-
-    fun weekOf(date: LocalDate): Int {
-        val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
-        return timetable.currentWeek + ChronoUnit.WEEKS.between(baseMonday, monday).toInt()
-    }
-
-    val result = mutableListOf<UpcomingClass>()
-    for (offset in 0L..6L) {
-        val date = today.plusDays(offset)
-        val courses = timetable.coursesInWeek(weekOf(date))
-            .filter { it.dayOfWeek == date.dayOfWeek.value }
-            .sortedBy { it.startPeriod }
-        for (course in courses) {
-            val start = parseClock(timetable.jcTimes[course.startPeriod]?.start)
-            val end = parseClock(timetable.jcTimes[course.endPeriod]?.end)
-            val startsAt = start?.let { date.atTime(it) }
-            val endsAt = end?.let { date.atTime(it) }
-            val ongoing = startsAt != null && endsAt != null &&
-                !now.isBefore(startsAt) && now.isBefore(endsAt)
-            // 缓存里缺节次时间时（jcTimes 为空），按节次顺序兜底成「还没上」。
-            val upcoming = startsAt == null || now.isBefore(startsAt)
-            if (!ongoing && !upcoming) continue
-            result += UpcomingClass(
-                course = course,
-                date = date,
-                start = start,
-                end = end,
-                isOngoing = ongoing,
-                minutesUntil = startsAt?.let { Duration.between(now, it).toMinutes().coerceAtLeast(0) },
-                isToday = offset == 0L,
-            )
-            if (result.size >= limit) return result
-        }
-    }
-    return result
-}
-
-private fun parseClock(raw: String?): LocalTime? {
-    val text = raw?.trim().orEmpty()
-    if (text.isBlank()) return null
-    val parts = text.split(':')
-    if (parts.size < 2) return null
-    return runCatching { LocalTime.of(parts[0].toInt(), parts[1].toInt()) }.getOrNull()
-}
-
-private fun formatClock(time: LocalTime): String =
-    String.format(Locale.CHINA, "%02d:%02d", time.hour, time.minute)
-
-private fun dayPrefix(item: UpcomingClass, today: LocalDate): String = when {
-    item.date == today -> ""
-    item.date == today.plusDays(1) -> "明天"
-    else -> "${item.date.monthValue}/${item.date.dayOfMonth}"
-}
-
-private fun countdownLabel(item: UpcomingClass): String = when {
-    item.isOngoing -> "正在上课"
-    item.minutesUntil == null -> "待上课"
-    item.minutesUntil <= 0L -> "马上开始"
-    item.minutesUntil < 60L -> "${item.minutesUntil} 分钟后"
-    else -> "还有 ${item.minutesUntil / 60} 小时 ${item.minutesUntil % 60} 分"
 }
 
 /**
@@ -1473,13 +1396,14 @@ private fun NextClassWidget(
     onOpenTimetable: () -> Unit,
 ) {
     val timetable = cached?.timetable
-    val now = rememberNow()
-    val upcoming = remember(timetable, cached?.savedAt, now) {
-        timetable?.let { upcomingClasses(it, cached?.savedAt ?: 0L, now, limit = 2) }.orEmpty()
-    }
-    val account = accounts[if (jwxtSource == JwxtSource.Grab) "grab" else "jwxt"]
-    val sessionLost = account?.loggedIn != true
-    val today = now.toLocalDate()
+    val snapshot = nextClassSnapshot(
+        cached = cached,
+        loggedIn = accounts[if (jwxtSource == JwxtSource.Grab) "grab" else "jwxt"]?.loggedIn == true,
+        now = rememberNow(),
+    )
+    val upcoming = snapshot.upcoming
+    val sessionLost = snapshot.sessionLost
+    val today = snapshot.today
 
     WidgetCard(
         title = "下一节课",

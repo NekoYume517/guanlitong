@@ -74,6 +74,7 @@ import com.sdmu.guanlitong.data.jwxt.JwxtAccess
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtException
 import com.sdmu.guanlitong.data.jwxt.JwxtSessionExpiredException
+import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.Timetable
 import com.sdmu.guanlitong.data.jwxt.WeekInfo
@@ -178,6 +179,7 @@ fun JwxtScreen(
                         val timetable = client?.fetchTimetable()
                             ?: throw JwxtException("数据来源不可用")
                         val saved = JwxtCache.save(context, origin, timetable)
+                        refreshDesktopWidgets(context)
                         TimetableState.Ready(
                             timetable = timetable,
                             updatedAt = saved.savedAt,
