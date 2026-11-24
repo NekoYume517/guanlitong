@@ -1,0 +1,205 @@
+# 管院通
+
+当前版本只保留**官方教务系统**与自建**抢课助手**，其余校园服务按计划逐个加回。
+
+源码与 Release 都在 GitHub：[NekoYume517/guanlitong](https://github.com/NekoYume517/guanlitong)。
+App 内「我的 → 检查更新」会从 Release 拉取最新版本，下载后交给系统安装器覆盖安装。
+
+- 原生 **Jetpack Compose + Material 3 Expressive（M3E）**
+- 不做强制登录门：默认直接进首页，账号在「我的」里按服务单独管理
+- 网页兜底用 WebView 打开并持久化 Cookie，与原生页面共用登录态
+- **官方教务系统支持原生登录**：学号密码 + 验证码（ML Kit 离线识别，可手动改），可记住密码；登录后的 Cookie 同时注入 WebView
+- **教务数据来源可切换**：默认直连官方教务，也可以改用自建抢课助手（`jwxt.bansonic.top`，即 sdmu-website-2）；「功能」页只保留一个「教务系统」二级 tab
+- **教务课表已原生实现**：原生页面复用同一份登录态调教务接口，按周渲染课表，带本地缓存（两种来源各存一份）
+
+## 页面结构
+
+底部是三个 tab，覆盖页（网页 / 账号 / 课表 / 设置）打开时带原生前进、后退滑动动画。
+
+| 页面 | 内容 |
+|---|---|
+| 概览 | 像桌面小组件一样自由组合：今日课程、快捷功能、教务概览、账号状态，每项都有小 / 中 / 大三种尺寸；底部面板真实预览添加、长按弹簧拖动排序、拖到右下角删除；顶部标题固定不随滚动，右上角直达添加面板与「我的」 |
+| 功能 | 顶部搜索；左侧纯文字服务栏，右侧两列功能胶囊（如 教务系统 → 课表 / 成绩查询 / 选课 / 考试安排） |
+| 我的 | 账号管理（只有「教务系统」这一个入口，登录状态跟随所选数据来源）、检查更新（从 GitHub Release 拉取新版本）、清除登录状态、关于 |
+| 原生课表 | 学期与周次切换、7 天 × 节次网格、课程详情；本地缓存优先、后台刷新；登录失效时引导到 WebView 登录 |
+| 原生成绩 | 按学期筛选，显示加权平均、学分、绩点与课程性质；失败时可转网页 |
+| 原生考试 | 考试时间、考场、形式与「未开始 / 进行中 / 已结束」状态 |
+| 原生选课 | 可选课程搜索、展开教学班查看时间/地点/容量，支持选课、退课与已选课程列表；抢课助手来源下，已满的教学班可以直接创建抢课任务 |
+| 抢课任务 | 仅抢课助手来源时显示入口（「功能 → 全部功能」与「教务首页」）；按状态筛选，点进任务可看详情与执行日志，日志对进行中的任务每 2 秒自动刷新，排队中 / 抢课中的任务可直接取消 |
+| 教务首页 | 原生入口页：课表 / 成绩 / 考试 / 选课，另留「改用网页版」兜底 |
+| 账号详情 | 数据来源切换（官方 / 抢课助手）；切到抢课助手时直接在 tab 下方填站点账号密码登录；网页登录入口、记住密码、退出登录、登录状态检测 |
+| 内嵌网页 | WebView + 进度条 + 刷新 + 用系统浏览器打开，返回键优先回退网页 |
+
+> 功能目录集中在 `data/FeatureCatalog.kt`：每项声明所属服务、图标和去向（原生课表 / 网页 / 账号页 / 独立 App），「功能」页与概览的「快捷功能」都从这里取。
+
+## 概览与功能页
+
+- **概览**：像桌面小组件一样自由组合。每个功能都有**小 / 中 / 大**三种尺寸：小号两块并排，中号和大号各占一行；同一功能可以用不同尺寸出现多次。顶部「概览 / 问候 / 日期」固定，只有小组件区域滚动。
+  - 右上角按钮从底部弹出**小组件面板**，按小 / 中 / 大分组，用 `FlowRow` 流式排布预览；预览直接复用首页组件，与真实数据、样式和尺寸一致（小号按半宽预览）。点一下预览就关闭面板，直接滚到底部，并用主色描边短暂高亮新加的组件。
+  - **长按卡片**进入拖动：卡片浮到顶层跟手移动，虚线占位与其他组件用弹簧动画平滑移动到将要落下的位置（两块小卡互换、大卡跨过小卡也不会闪烁）。中号 / 大号独占一行，跨行时会把对面整行一起跨过去，并排的两块小号不会被拆开。小号自己也能跨行：手指挪到别的行上时，按竖直方向最近的那一行落，行内再按横向就近选左边或右边的槽位（三块小卡「上二下一」时，左上那块可以直接拖到第二行）。落点判断按行/列分开：同一行只看横向、跨行只看纵向，手指纵向抖一下不会被误判成换位。跟手位移、让位、高亮都放在绘制阶段（`graphicsLayer`），拖动期间既不重排也不整页重组，弹簧被新的落点打断时会接着当前速度走。松手后卡片继续用弹簧飞回占位，动画结束才保存新顺序。布局在拖动期间不重排，避免反复测量导致跳动。
+  - 拖动时右下角**自动弹出删除图标**，把卡片拖到图标上（图标变红）卡片会平滑缩到 1/2；松手后从 1/2 继续缩小并淡出，动画结束后才真正移除。
+  - 组件清单与顺序存在 `DashboardStore`（JSON，含 `id` / `type` / `size`）；旧版本逗号分隔的 key 列表会在首次读取时自动迁移。全部移除后显示空状态。今日课程直接读课表缓存，按当前周与星期过滤。
+- **功能**：顶部搜索框跨所有服务匹配功能名、副标题与服务名，结果按服务分组；不搜索时显示左侧选中服务的全部功能。左侧只显示服务名，选中项用 `secondaryContainer` 胶囊高亮。
+- **页面动画**：`AppRoot` 用外层 `AnimatedContent` 包住「根页面 ↔ 覆盖页」。前进时新页面从右侧滑入、旧页面向左轻移淡出；后退时旧页面向右滑出、根页面从左侧回位（320ms 滑动 + 200ms 淡入淡出），与 Android 原生的页面转场一致。
+
+## 服务一览
+
+目前只保留官方教务系统与抢课助手；智慧山管、山管助手、图书馆、官网已从 UI 移除，等逐项确认后再加回。
+
+| 服务 | 地址 | 登录方式 |
+|---|---|---|
+| 官方教务系统 | `https://jwxt.sdmu.edu.cn/jwglxt/xtgl/login_slogin.html` | 原生登录（验证码自动识别，可记住密码）或 WebView 登录；课表/成绩/考试/选课均为原生页 |
+| 抢课助手 | `https://jwxt.bansonic.top` | 站点账号密码登录（`POST /api/login`），Cookie 注入 WebView；可作为教务数据来源，后台用它配置的教务账号代查 |
+
+## 教务数据来源
+
+「我的 → 教务系统 → 数据来源」可以在两个 tab 之间切换，默认是官方教务系统：
+
+- **官方教务系统**：原生页直接带 `jwglxt` Cookie 请求 `jwxt.sdmu.edu.cn`，成绩、考试、选课接口见下文。
+- **抢课助手**：原生页改用抢课助手的站点会话请求 `jwxt.bansonic.top`，由后端拿站内配置的教务账号代查：
+  - 课表：`GET /api/timetable/semester` → `GET /api/timetable?kblx=2` → `GET /api/timetable/jc_times`
+  - 成绩 / 考试：`GET /api/jwxt/grades`、`GET /api/jwxt/exams`
+  - 选课：`GET /api/courses/list|jxb_list|chosen|status`，`POST /api/courses/add|drop`
+  - 抢课任务：`GET /api/tasks/list`，`GET /api/tasks/<id>`，`POST /api/tasks/create`，`POST /api/tasks/<id>/cancel`
+  - 任务日志：`GET /api/logs/list?task_id=`（首次全量）与 `GET /api/logs/recent?after_id=`（运行中增量轮询）
+
+两种来源各用各的 Cookie 域、各存一份课表缓存；切换后课表、成绩、考试、选课以及概览的「今日课程」都会跟着换。
+
+抢课助手**只作为数据来源**，不在「我的」里单独占账号入口：账号管理始终只有「教务系统」一个入口，切到「抢课助手」tab 后，登录框（账号 / 密码 / 记住密码）直接嵌在 tab 下方；原生选课页在抢课来源下未登录时，也直接内嵌同一个登录框。登录成功后 Cookie 注入抢课助手站点域，并立即刷新当前页。抢课助手还需要在它的网页版里配置好教务账号。
+
+唯一账号入口的登录状态跟随当前数据来源：来源是抢课助手时，账号页顶部、「我的」账号管理和概览的「账号状态」都显示抢课助手账号的登录状态；切回官方来源则显示教务账号状态。
+
+### 掉线自动重登
+
+只要用户没有主动退出、且勾选过「记住密码」，官方教务和抢课助手掉线后都会自动重新登录：
+
+- **触发时机**：打开 App / 切换数据来源时，如果本地会话已经没了，会先补登录；访问课表、成绩、考试、选课、抢课任务时，遇到会话失效会先自动重登再重放这次请求，页面不需要用户手动登录。
+- **重试策略**：默认 3 次，间隔 1s / 2s / 4s 指数退避；官方教务每轮自动识别新验证码，抢课助手每轮重新提交账号密码。
+- 重登成功后会把新 Cookie 注入 WebView 并刷新登录时间；3 次都失败才退回「登录失效」提示。主动退出登录或没保存密码时不会自动重试。
+
+> 选课页之外的教务原生页（课表、成绩、考试）在抢课助手来源下显示「登录抢课助手」，会跳到唯一的账号入口（教务系统 → 数据来源 → 抢课助手）；「用网页打开」也会打开抢课助手站点。
+
+## 原生课表
+
+课表数据由 App 直接向教务系统请求，不经过任何中转服务器：
+
+1. 进入页面时读取 WebView `CookieManager` 中的 `jwglxt` Cookie；没有 Cookie 时显示「需要登录教务系统」，可直接弹原生登录框，或改用网页登录。
+2. `GET /kbcx/xskbcxZccx_cxXskbcxIndex.html?gnmkdm=N2154&layout=default` 解析学年/学期、校区等预渲染字段；被 302 到登录页即视为会话失效。
+3. 依次请求周次、全学期课表与节次时间；课表优先网页版接口，返回空则回退 Mobile 接口。
+4. 周次描述 `zcd` 按分段解析单双周（如 `1-3周,5-7周(单),8-16周`）；节次优先读 `jcs` / `jc`，缺失时才退回 `jcor`。
+   > 真实数据里 `jcor` 常常是当天的时间块（如 `1-8`），实际节次在 `jcs`（如 `3-4`）。只读 `jcor` 会把每门课都画成整天。
+5. 页面内按周过滤；课程块按节次偏移渲染，同一天时间重叠的课程自动并排；点课程可看教师、教室、周次与上下课时间。
+6. 课表写入本地缓存（SharedPreferences，按数据来源地址区分，官方与抢课助手各一份）：再次进入先显示缓存，再后台刷新；网络失败或登录失效时保留缓存并显示状态条。退出教务账号或「清除所有登录状态」会一并清掉缓存。
+
+> 页面 GET 不能带 `X-Requested-With`，否则学校网关会直接返回 `901`；该请求头只用于 AJAX 接口。
+
+接口路径与参数参考 `D:\code\sdmu-website-2\app\kbcx_api.py`。
+
+## 教务原生登录
+
+登录协议移植自 sdmu-website-2 的 `app/jwxt_login.py`：
+
+1. `GET /jwglxt/xtgl/login_slogin.html` 建立会话并取出 `csrftoken`（顺序不能反，登录页会刷新验证码会话）。
+2. `GET /jwglxt/kaptcha?time=…` 取图片，先在像素层做**灰度化 → Otsu 自适应二值化 → 连通域剔除噪点与干扰线 → 裁切放大补白边**，再交给 **ML Kit 离线文字识别**（Latin 模型，随 APK 打包，不需要 Google Play 服务）；结果只保留 6 位 ASCII 数字/字母并填入输入框，可手动修改，验证码错误时自动换一张。
+3. `GET /jwglxt/xtgl/login_getPublicKey.html` 取 RSA modulus/exponent，用 `RSA/ECB/PKCS1Padding` 加密密码。
+4. `POST /jwglxt/xtgl/login_slogin.html` 提交 `yhm/mm/yzm/csrftoken` 等字段；302 到 `index_initMenu` / `auth_loginSuccess` 视为成功，跳回登录页时再跟随一跳确认。
+5. 成功后把会话 Cookie 写入 WebView（先清掉 `jwglxt` 路径下同名旧 Cookie，避免一次请求带两个 `JSESSIONID`），原生课表与网页共用登录态。勾选「记住密码」时密码用 Android Keystore AES/GCM 加密保存。
+
+> 账号只发往 `jwxt.sdmu.edu.cn`；OCR 在本机完成，验证码图片不会上传到第三方。
+
+## 账号模型
+
+- 每个服务独立一条账号记录：账号名、登录状态、最近登录时间；抢课助手的记录随数据来源 tab 一起管理，不单独出现在「我的」列表里。
+- 密码只在勾选「记住密码」时保存，使用 **Android Keystore AES/GCM** 加密后落盘，不依赖第三方加密库。
+- 网页登录状态存在 WebView 的 Cookie 中；「退出登录」会逐个把该域名下的 Cookie 置为过期。
+- 不做全局登录门，未登录也能先浏览概览与功能入口。
+
+## 应用内更新
+
+更新包不走应用商店，直接从 GitHub Releases 取：
+
+- **自动检查**：打开 App 后延迟约 1 秒在后台查一次，12 小时内不重复打扰；检查失败静默，不影响正常使用。发现新版本时弹出对话框，显示版本号、更新说明和安装包大小，可以「下载并安装」或「稍后」。
+- **手动检查**：「我的 → 检查更新」随时触发，副标题会显示当前版本、正在检查、已是最新或发现新版本。
+- **并发拉取**：`releases/latest` 与 `releases?per_page=10` 两个 GitHub 接口在 IO 线程池上**并发请求**，先拿到可用结果的为准；单个接口超时或被限流不会把整次检查卡住。版本号按段比较（`1.2.10` 比 `1.2.9` 新）。只认非 draft、非 prerelease 且带 `.apk` 资产的 Release。
+- **下载**：全程在 IO 线程流式写入 `cache/updates/`，每 64 KB 回调一次进度，界面按百分比刷新；下载完成后校验文件大小。中途可以取消。
+- **安装权限**：`AndroidManifest.xml` 声明了 `REQUEST_INSTALL_PACKAGES`。下载完成时如果系统还没允许「安装未知应用」，对话框会变成引导页，按钮「去开启」跳到系统的「安装未知应用」开关；允许后回到 App 再点一次即可。已有权限时直接拉起系统安装器。
+- **交给系统安装**：APK 通过 `FileProvider`（`${applicationId}.updates`，只暴露 `cache/updates/`）以 `content://` 交给安装器，不落外部存储。覆盖安装会保留账号、看板顺序和设置。
+- 手动构建的调试包与 Release 包签名不同，装到同一台机器上需要先卸载旧包；从同一来源升级不会有这个问题。
+
+> 发布新版本的流程：改 `app/build.gradle.kts` 里的 `versionCode` / `versionName` → 构建 APK → 在 GitHub 建一个 tag 为 `v<versionName>` 的 Release 并上传 APK。App 只认带 `.apk` 资产的正式 Release。
+
+## 构建
+
+## 构建
+
+环境：JDK 17、Android SDK（`compileSdk 37.1`）、Gradle 9.9.x（仓库内已带 wrapper）。
+
+首次需要安装 37.1 平台：
+
+```powershell
+D:\Android\sdk\cmdline-tools\latest\bin\sdkmanager.bat "platforms;android-37.1"
+```
+
+然后：
+
+```powershell
+cd D:\code\管院通
+.\gradlew.bat :app:assembleDebug
+```
+
+如果本机使用 Clash 等代理，`gradle.properties` 已配置 `127.0.0.1:7890`，按需修改；不需要代理时把文末四行 `systemProp.*.proxy*` 删掉即可。
+
+产物：`app/build/outputs/apk/debug/app-debug.apk`
+
+> 验证码识别使用打包进 APK 的 ML Kit Latin 模型（不依赖 Google Play 服务），APK 会比不带 OCR 的版本大约 40 MB。
+
+> 项目目录含中文，`gradle.properties` 中已开启 `android.overridePathCheck=true`。
+
+## 目录
+
+```
+app/src/main/java/com/sdmu/guanlitong/
+├── MainActivity.kt
+├── data/
+│   ├── Models.kt            # SchoolService / Account / LoginMode
+│   ├── ServiceCatalog.kt    # 校园服务清单（官方教务 + 抢课助手）
+│   ├── FeatureCatalog.kt    # 服务下的功能目录（课表 / 成绩 / 选课…）
+│   ├── DashboardStore.kt    # 概览小组件（类型 / 尺寸 / 顺序）
+│   ├── AccountStore.kt      # 账号状态 + 加密密码
+│   ├── SettingsStore.kt     # 服务地址 + 教务数据来源
+│   ├── Secrets.kt           # Android Keystore AES/GCM
+│   ├── CookieUtils.kt       # WebView Cookie 注入 / 清理 / 登录判断
+│   ├── ApiClient.kt         # 抢课助手 /api/login
+│   ├── update/
+│   │   └── UpdateClient.kt  # GitHub Release 检查 / 下载 / 安装
+│   └── jwxt/
+│       ├── JwxtModels.kt    # 课表模型 + 周次/节次解析
+│       ├── JwxtClient.kt    # 官方教务课表接口（复用 WebView Cookie）
+│       ├── JwxtLoginClient.kt # 教务原生登录（csrftoken / RSA / 验证码）
+│       ├── JwxtApiClient.kt # 官方成绩 / 考试 / 选课接口
+│       ├── JwxtParsing.kt   # 教务字段解析（官方与抢课助手共用）
+│       ├── JwxtSource.kt    # 数据来源枚举 + JwxtAccess
+│       ├── JwxtDataSource.kt # 统一数据源接口与工厂
+│       ├── GrabApiClient.kt # 抢课助手站点接口（代查教务 + 抢课任务）
+│       ├── SessionRelogin.kt # 掉线自动重登（3 次指数退避）
+│       ├── CaptchaOcr.kt    # 验证码灰度/Otsu/去干扰 + ML Kit 识别
+│       └── JwxtCache.kt     # 课表本地缓存（按来源分开）
+└── ui/
+    ├── AppRoot.kt           # 三 tab + 覆盖页前进/后退动画
+    ├── theme/Theme.kt       # MaterialExpressiveTheme
+    ├── overview/OverviewScreen.kt # 可自定义概览组件
+    ├── features/FeaturesScreen.kt # 左侧服务栏 + 功能胶囊 + 搜索
+    ├── mine/MineScreen.kt
+    ├── update/UpdateUi.kt   # 更新对话框与状态文案
+    ├── account/AccountScreen.kt
+    ├── account/GrabLoginCard.kt # 抢课助手登录卡片（数据来源 tab / 选课页共用）
+    ├── web/ServiceWebScreen.kt
+    ├── jwxt/JwxtScreen.kt   # 原生课表页
+    ├── jwxt/JwxtDataScreens.kt # 原生成绩 / 考试 / 选课 / 教务首页
+    ├── jwxt/JwxtLoginPanel.kt # 原生登录面板 / 登录弹窗
+    └── components/Components.kt
+```
+
+## 说明
+
+本 App 为非官方个人整合工具，与山东管理学院官方无关。请合理使用学校系统，不要对教务服务器造成过大压力。

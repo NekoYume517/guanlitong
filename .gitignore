@@ -1,0 +1,14 @@
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+.screens/
+*.iml
+.idea/
+.DS_Store
+
+# 构建产物与临时截图
+*.apk
+/*.png
+.tmp_shots/
