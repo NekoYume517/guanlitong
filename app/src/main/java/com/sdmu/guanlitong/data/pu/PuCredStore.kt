@@ -38,7 +38,7 @@ class PuCredStore(context: Context) {
             refreshRuntime()
         }
 
-    /** 学校 go_id，随登录返回的 `sid` 一起保存。 */
+    /** 学校 go_id：登录时用户选定的学校，用于 Bearer 与 school-id 头。 */
     var goId: String?
         get() = cachedGoId
         set(value) {

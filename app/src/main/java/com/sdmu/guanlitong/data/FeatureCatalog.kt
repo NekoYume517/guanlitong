@@ -24,7 +24,7 @@ enum class JwxtPage { Timetable, Hub, Grades, Exams, Selection, Tasks }
 /** 山管app 内置的原生页面。 */
 enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 
-/** 口袋校园内置的原生页面。 */
+/** 第二课堂内置的原生页面。 */
 enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
@@ -50,7 +50,7 @@ sealed interface FeatureAction {
     /** 山管app 内置原生页面。 */
     data class Sdgy(val page: SdgyPage) : FeatureAction
 
-    /** 口袋校园内置原生页面。 */
+    /** 第二课堂内置原生页面。 */
     data class Pu(val page: PuPage) : FeatureAction
 
     /** 打开某个服务的网页；[url] 为空时用服务配置的地址。 */

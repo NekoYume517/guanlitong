@@ -22,9 +22,9 @@ class PuException(message: String, val code: Int = 0) : Exception(message)
  * 原生网络异常换成不暴露堆栈的说明；其余保留 message。
  */
 fun Throwable.puMessage(): String = when (this) {
-    is PuException -> message?.takeIf { it.isNotBlank() } ?: "口袋校园请求失败"
+    is PuException -> message?.takeIf { it.isNotBlank() } ?: "第二课堂请求失败"
     is UnknownHostException -> "网络不可用，请检查网络后重试"
     is SocketTimeoutException -> "连接超时，请稍后重试"
     is IOException -> "网络错误，请稍后重试"
-    else -> message?.takeIf { it.isNotBlank() } ?: "口袋校园请求失败"
+    else -> message?.takeIf { it.isNotBlank() } ?: "第二课堂请求失败"
 }

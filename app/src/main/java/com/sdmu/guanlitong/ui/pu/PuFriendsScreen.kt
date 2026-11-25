@@ -254,7 +254,7 @@ private fun FriendRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    friend.nickname.ifBlank { "口袋校园用户" },
+                    friend.nickname.ifBlank { "第二课堂用户" },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -296,7 +296,7 @@ private fun relationText(friend: PuFriend): String = when {
     friend.isFollowee && friend.isFollower -> "互相关注"
     friend.isFollowee -> "我关注了 TA"
     friend.isFollower -> "TA 关注了我"
-    else -> "口袋校园用户"
+    else -> "第二课堂用户"
 }
 
 /** 好友主页：`otherUser(uid)` 拉取详情，页内可关注/取关。 */
@@ -349,7 +349,7 @@ private fun FriendProfileDialog(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    friend!!.nickname.ifBlank { "口袋校园用户" },
+                                    friend!!.nickname.ifBlank { "第二课堂用户" },
                                     style = MaterialTheme.typography.titleMedium,
                                 )
                                 Text(

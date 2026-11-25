@@ -148,7 +148,7 @@ fun PuPersonalCodeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     Spacer(Modifier.height(24.dp))
 
                     Text(
-                        current.name.ifBlank { "口袋校园用户" },
+                        current.name.ifBlank { "第二课堂用户" },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,

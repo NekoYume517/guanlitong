@@ -140,6 +140,7 @@ fun FeaturesScreen(
     val favoriteFeatures = remember(favoriteIds, sdgyGroups) {
         favoriteIds.mapNotNull { id -> resolveFavorite(id, sdgyGroups) }
     }
+    val favoriteIdSet = remember(favoriteIds) { favoriteIds.toSet() }
 
     // 右上角三个点切换布局：按分类查看（默认），或把全部服务平铺成一页。
     // 选择存在本机，下次打开还是上次那种。
@@ -191,6 +192,15 @@ fun FeaturesScreen(
     }
     val openMenuForEntry: (SdgyAppEntry, Rect) -> Unit = remember(favorites) {
         { entry, anchor -> openMenuFor(FeatureCatalog.sdgyApp(entry), anchor) }
+    }
+    // 「收藏」分类里的胶囊不标星，浮起的那份也保持一致。
+    val openMenuForFavorite: (ServiceFeature, Rect) -> Unit = remember {
+        { feature, anchor ->
+            if (menuTarget == null) {
+                menuTarget = LongPressTarget(feature, anchor, star = false)
+                menuVisible = true
+            }
+        }
     }
 
     val keyword = query.trim()
@@ -315,6 +325,8 @@ fun FeaturesScreen(
                     StackedFeaturesPane(
                         services = services,
                         favoriteFeatures = favoriteFeatures,
+                        favoriteIds = favoriteIdSet,
+                        onOpenMenuForFavorite = openMenuForFavorite,
                         sdgyGroups = sdgyGroups,
                         grabSource = grabSource,
                         onOpenFeature = onOpenFeature,
@@ -356,7 +368,9 @@ fun FeaturesScreen(
                     sdgyGroups = sdgyGroups,
                     onSdgyGroupsChange = { sdgyGroups = it },
                     favoriteFeatures = favoriteFeatures,
+                    favoriteIds = favoriteIdSet,
                     onOpenMenuFor = openMenuFor,
+                    onOpenMenuForFavorite = openMenuForFavorite,
                     onOpenMenuForEntry = openMenuForEntry,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
@@ -412,7 +426,9 @@ fun FeaturesScreen(
                         sdgyGroups = sdgyGroups,
                         onSdgyGroupsChange = { sdgyGroups = it },
                         favoriteFeatures = favoriteFeatures,
+                        favoriteIds = favoriteIdSet,
                         onOpenMenuFor = openMenuFor,
+                        onOpenMenuForFavorite = openMenuForFavorite,
                         onOpenMenuForEntry = openMenuForEntry,
                         modifier = Modifier.weight(1f),
                     )
@@ -447,7 +463,12 @@ fun FeaturesScreen(
                 onRequestClose = closeMenu,
                 modifier = Modifier.fillMaxSize(),
                 // 被长按的胶囊浮在最上层，保持清晰。
-                lifted = { FeatureChipBody(target.feature) },
+                lifted = {
+                    FeatureChipBody(
+                        feature = target.feature,
+                        favorited = target.star && target.feature.id in favoriteIdSet,
+                    )
+                },
             ) {
                 // 已收藏的用实心星，和「取消收藏」对应；没收藏的是描边星。
                 val removing = favorites.isFavorite(target.feature.id)
@@ -541,10 +562,12 @@ private fun LayoutMenuItem(text: String, selected: Boolean, onClick: () -> Unit)
 private fun StackedFeaturesPane(
     services: List<SchoolService>,
     favoriteFeatures: List<ServiceFeature>,
+    favoriteIds: Set<String>,
     sdgyGroups: List<SdgyAppGroup>,
     grabSource: Boolean,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenMenuFor: (ServiceFeature, Rect) -> Unit,
+    onOpenMenuForFavorite: (ServiceFeature, Rect) -> Unit,
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
@@ -555,7 +578,7 @@ private fun StackedFeaturesPane(
     ) {
         if (favoriteFeatures.isNotEmpty()) {
             StackedSectionTitle("收藏")
-            FeatureChipRows(favoriteFeatures, onOpenFeature, onOpenMenuFor)
+            FeatureChipRows(favoriteFeatures, onOpenFeature, onOpenMenuForFavorite)
         }
 
         services.filter { it.id != FAVORITES_ID }.forEach { service ->
@@ -568,6 +591,7 @@ private fun StackedFeaturesPane(
                         features = group.apps.map { FeatureCatalog.sdgyApp(it) },
                         onOpenFeature = onOpenFeature,
                         onLongPress = onOpenMenuFor,
+                        favoriteIds = favoriteIds,
                     )
                 }
             } else {
@@ -575,7 +599,7 @@ private fun StackedFeaturesPane(
                     .filter { grabSource || !it.grabSourceOnly }
                 if (features.isEmpty()) return@forEach
                 StackedSectionTitle(service.name)
-                FeatureChipRows(features, onOpenFeature, onOpenMenuFor)
+                FeatureChipRows(features, onOpenFeature, onOpenMenuFor, favoriteIds)
             }
         }
     }
@@ -622,7 +646,9 @@ private fun FeaturePaneContent(
     sdgyGroups: List<SdgyAppGroup>,
     onSdgyGroupsChange: (List<SdgyAppGroup>) -> Unit,
     favoriteFeatures: List<ServiceFeature>,
+    favoriteIds: Set<String>,
     onOpenMenuFor: (ServiceFeature, Rect) -> Unit,
+    onOpenMenuForFavorite: (ServiceFeature, Rect) -> Unit,
     onOpenMenuForEntry: (SdgyAppEntry, Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -639,13 +665,14 @@ private fun FeaturePaneContent(
                 results = results,
                 onOpenFeature = onOpenFeature,
                 onOpenMenuFor = onOpenMenuFor,
+                favoriteIds = favoriteIds,
                 scrollState = searchScrollState,
                 modifier = Modifier.fillMaxSize(),
             )
             pane.id == FAVORITES_ID -> FavoritesPane(
                 features = favoriteFeatures,
                 onOpenFeature = onOpenFeature,
-                onOpenMenuFor = onOpenMenuFor,
+                onOpenMenuFor = onOpenMenuForFavorite,
                 scrollState = scrollStates.getOrPut(pane.id) { ScrollState(0) },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -662,6 +689,7 @@ private fun FeaturePaneContent(
                 externalGroups = sdgyGroups,
                 onGroupsChange = onSdgyGroupsChange,
                 onLongPressEntry = onOpenMenuForEntry,
+                favoriteIds = favoriteIds,
             )
             else -> ServicePane(
                 service = pane,
@@ -674,6 +702,7 @@ private fun FeaturePaneContent(
                 onOpenSdgyNative = onOpenSdgyNative,
                 onOpenSdgyWeb = onOpenSdgyWeb,
                 onOpenMenuFor = onOpenMenuFor,
+                favoriteIds = favoriteIds,
                 scrollStates = scrollStates,
                 sdgyListState = sdgyListState,
                 modifier = Modifier.fillMaxSize(),
@@ -737,6 +766,7 @@ private fun ServicePane(
     onOpenSdgyNative: (SdgyPage) -> Unit = { _ -> },
     onOpenSdgyWeb: (title: String, appId: String, url: String, lx: String) -> Unit = { _, _, _, _ -> },
     onOpenMenuFor: (ServiceFeature, Rect) -> Unit,
+    favoriteIds: Set<String>,
     scrollStates: MutableMap<String, ScrollState>,
     sdgyListState: LazyListState,
     modifier: Modifier = Modifier,
@@ -759,6 +789,7 @@ private fun ServicePane(
                 showSearch = false,
                 externalQuery = "",
                 flowChips = true,
+                favoriteIds = favoriteIds,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
             )
         } else {
@@ -775,7 +806,12 @@ private fun ServicePane(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    FeatureChipRows(features = features, onOpenFeature = onOpenFeature, onLongPress = onOpenMenuFor)
+                    FeatureChipRows(
+                        features = features,
+                        onOpenFeature = onOpenFeature,
+                        onLongPress = onOpenMenuFor,
+                        favoriteIds = favoriteIds,
+                    )
                 }
             }
         }
@@ -835,6 +871,7 @@ private fun SearchResultsPane(
     results: List<ServiceFeature>,
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenMenuFor: (ServiceFeature, Rect) -> Unit,
+    favoriteIds: Set<String>,
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
@@ -868,7 +905,12 @@ private fun SearchResultsPane(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
             )
-            FeatureChipRows(features = features, onOpenFeature = onOpenFeature, onLongPress = onOpenMenuFor)
+            FeatureChipRows(
+                features = features,
+                onOpenFeature = onOpenFeature,
+                onLongPress = onOpenMenuFor,
+                favoriteIds = favoriteIds,
+            )
         }
     }
 }
@@ -879,11 +921,14 @@ private fun FeatureChipRows(
     onOpenFeature: (ServiceFeature) -> Unit,
     /** 长按胶囊，带上它在窗口里的位置，用来定位菜单。 */
     onLongPress: ((ServiceFeature, Rect) -> Unit)? = null,
+    /** 已收藏的入口在图标前打一颗星；「收藏」分类里全都有，就不用重复标。 */
+    favoriteIds: Set<String> = emptySet(),
 ) {
     FlowChipRow(modifier = Modifier.fillMaxWidth()) {
         features.forEach { feature ->
             FeatureChip(
                 feature = feature,
+                favorited = feature.id in favoriteIds,
                 onClick = { onOpenFeature(feature) },
                 onLongPress = onLongPress,
             )
@@ -898,6 +943,7 @@ private fun FeatureChip(
     feature: ServiceFeature,
     onClick: () -> Unit,
     onLongPress: ((ServiceFeature, Rect) -> Unit)? = null,
+    favorited: Boolean = false,
 ) {
     // 长按时才取位置；用最新的布局坐标，避免闭包拿到过期的。
     var chipBounds by remember { mutableStateOf(Rect.Zero) }
@@ -913,7 +959,7 @@ private fun FeatureChip(
                 onLongClick = onLongPress?.let { open -> { open(feature, chipBounds) } },
             ),
     ) {
-        ChipBody(feature, accent)
+        ChipBody(feature, accent, favorited)
     }
 }
 
@@ -922,12 +968,16 @@ private fun FeatureChip(
  * 列表里和长按菜单里浮起的那一份用的是同一个，所以两处外观完全一致。
  */
 @Composable
-internal fun FeatureChipBody(feature: ServiceFeature) {
-    ChipBody(feature, ServiceCatalog.byId(feature.targetServiceId)?.accent ?: MaterialTheme.colorScheme.primary)
+internal fun FeatureChipBody(feature: ServiceFeature, favorited: Boolean = false) {
+    ChipBody(
+        feature = feature,
+        accent = ServiceCatalog.byId(feature.targetServiceId)?.accent ?: MaterialTheme.colorScheme.primary,
+        favorited = favorited,
+    )
 }
 
 @Composable
-private fun ChipBody(feature: ServiceFeature, accent: Color) {
+private fun ChipBody(feature: ServiceFeature, accent: Color, favorited: Boolean = false) {
     Surface(
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -938,6 +988,15 @@ private fun ChipBody(feature: ServiceFeature, accent: Color) {
                 .padding(horizontal = 11.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (favorited) {
+                Icon(
+                    imageVector = Icons.Outlined.Star,
+                    contentDescription = "已收藏",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
             val officialIcon = com.sdmu.guanlitong.ui.components.rememberRemoteIcon(feature.iconUrl)
             if (officialIcon != null) {
                 androidx.compose.foundation.Image(
@@ -977,6 +1036,8 @@ private const val LAYOUT_STACKED = "stacked"
 private data class LongPressTarget(
     val feature: ServiceFeature,
     val anchor: Rect,
+    /** 「收藏」分类里本来就不标星，浮起的胶囊也跟着不标。 */
+    val star: Boolean = true,
 )
 
 private val FAVORITES_TAB = SchoolService(

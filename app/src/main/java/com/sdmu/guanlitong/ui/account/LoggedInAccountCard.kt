@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * 各账号登录成功后的统一卡片：一行写清「哪个账号、登录的是谁」，右侧直接退出。
- * 教务系统、抢课助手、山管 App、口袋校园共用这一种样式。
+ * 教务系统、抢课助手、山管 App、第二课堂共用这一种样式。
  */
 @Composable
 fun LoggedInAccountCard(

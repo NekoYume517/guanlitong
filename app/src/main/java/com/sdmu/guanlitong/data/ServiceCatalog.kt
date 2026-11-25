@@ -42,7 +42,7 @@ object ServiceCatalog {
         ),
 SchoolService(
             id = "pu",
-            name = "口袋校园",
+            name = "第二课堂",
             summary = "活动报名 · 签到签退 · 学时统计",
             defaultUrl = "",
             loginMode = LoginMode.CREDENTIAL,
@@ -53,7 +53,7 @@ SchoolService(
         ),
     )
 
-    /** 「功能」页顶部的分类：教务系统、山管 App、口袋校园。 */
+    /** 「功能」页顶部的分类：教务系统、山管 App、第二课堂。 */
     val featureServices: List<SchoolService>
         get() = services.filter { it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" }
 

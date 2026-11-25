@@ -44,7 +44,7 @@ import com.sdmu.guanlitong.ui.sdgy.rememberPermissionRequester
 
 /**
  * 全屏扫码框。扫码成功只回调一次，随后暂停相机；关闭由调用方控制。
- * 目前供口袋校园的「扫一扫」使用。
+ * 目前供第二课堂的「扫一扫」使用。
  */
 @Composable
 fun QrScannerDialog(

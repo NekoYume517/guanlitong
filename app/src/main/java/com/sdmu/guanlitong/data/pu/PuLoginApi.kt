@@ -72,8 +72,9 @@ object PuLoginApi {
                 if (!TOKEN_RE.matches(token)) {
                     throw PuException("登录返回的 token 格式异常（应为 32 位十六进制）", 502)
                 }
-                val goId = data.opt("sid")?.toString()?.trim()?.takeIf { it.isNotBlank() && it != "null" }
-                    ?: schoolId.toString()
+                // 官方协议：登录响应里的 sid 是另一个字段，不能拿来覆盖已选学校；
+                // Bearer / school-id 用的始终是用户选的学校 go_id。
+                val goId = schoolId.toString()
                 val base = data.optJSONObject("baseUserInfo")
                 val realName = base?.optString("realname", "").orEmpty().trim()
                     .ifBlank { base?.optString("nickname", "").orEmpty().trim() }

@@ -47,6 +47,10 @@ class PuApi(
                 conn.doInput = true
                 conn.useCaches = false
                 conn.setRequestProperty("Authorization", "Bearer $token:$goId")
+                // 与官方客户端一致：已选学校单独放一个头，别的地方仍用 go_id。
+                goId.takeIf { it.isNotBlank() }?.let {
+                    conn.setRequestProperty("school-id", it)
+                }
                 conn.setRequestProperty("Accept", "application/json")
                 conn.setRequestProperty("User-Agent", PuSign.userAgent())
                 PuSign.xSign()?.takeIf { it.isNotBlank() }?.let {

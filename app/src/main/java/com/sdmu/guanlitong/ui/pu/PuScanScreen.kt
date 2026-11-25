@@ -162,7 +162,7 @@ private fun ScanIdleCard(onScan: () -> Unit) {
             Text("识别二维码", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "支持口袋校园活动签到码与个人码；扫码结果只在本机解析。",
+                "支持第二课堂活动签到码与个人码；扫码结果只在本机解析。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -206,7 +206,7 @@ private fun UserResultCard(result: PuScanResult.User) {
         accent = MaterialTheme.colorScheme.secondaryContainer,
     ) {
         Text(
-            result.username.ifBlank { "口袋校园用户" },
+            result.username.ifBlank { "第二课堂用户" },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
@@ -285,7 +285,7 @@ private fun TextResultCard(
         accent = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Text(
-            "这不是口袋校园的二维码",
+            "这不是第二课堂的二维码",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )

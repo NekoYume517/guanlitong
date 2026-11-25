@@ -2,6 +2,7 @@ package com.sdmu.guanlitong.ui.pu
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +12,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -24,21 +34,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.pu.PuActivity
 import com.sdmu.guanlitong.data.pu.PuCredStore
 import com.sdmu.guanlitong.data.pu.PuException
 import com.sdmu.guanlitong.data.pu.puMessage
+import com.sdmu.guanlitong.ui.components.rememberRemoteIcon
 import com.sdmu.guanlitong.ui.sdgy.SdgyMessage
+import org.json.JSONObject
 import kotlinx.coroutines.CancellationException
 import java.util.Locale
 
 /** 未登录时各 PU 页面统一展示的引导文案。 */
-internal const val PU_LOGIN_HINT = "请先到「我的 → 口袋校园」登录"
+internal const val PU_LOGIN_HINT = "请先到「我的 → 第二课堂」登录"
 
 /** 服务端返回 body.code == 401 时统一提示。 */
 internal const val PU_AUTH_LOST = "登录已失效，请重新登录"
@@ -164,6 +181,21 @@ internal fun timeRange(start: String?, end: String?): String {
     }
 }
 
+/** 列表卡片用的一行时间：同年省年份，同一天只写一个日期。 */
+internal fun compactTimeRange(start: String?, end: String?): String {
+    val s = shortTime(start)
+    val e = shortTime(end)
+    if (s.isBlank()) return timeRange(start, end)
+    if (e.isBlank()) return s
+    val sDate = s.substringBefore(' ')
+    val eDate = e.substringBefore(' ')
+    val sTime = s.substringAfter(' ', "")
+    val eTime = e.substringAfter(' ', "")
+    if (sDate != eDate) return "$s → $e"
+    val day = sDate.substringAfter('-', sDate)
+    return if (sTime.isBlank() || eTime.isBlank()) day else "$day $sTime → $eTime"
+}
+
 /** 学时显示：整数不带小数点，非整数保留一位。 */
 internal fun creditText(value: Double): String = when {
     value == 0.0 -> "0"
@@ -183,16 +215,15 @@ internal fun PuActivityCard(
         modifier = modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            leadingContent = { PuActivityLogo(activity, 56.dp) },
+            headlineContent = {
                 Text(
                     activity.name.ifBlank { "未命名活动" },
                     style = MaterialTheme.typography.titleSmall,
@@ -200,44 +231,191 @@ internal fun PuActivityCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    timeRange(activity.startTime, activity.endTime),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val place = activity.signPlace.ifBlank { activity.address }
-                if (place.isNotBlank()) {
-                    Text(
-                        place,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+            },
+            supportingContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    val place = activity.signPlace.ifBlank { activity.address }
+                    if (place.isNotBlank()) PuActivityMetaRow(Icons.Outlined.Place, place)
+                    PuActivityMetaRow(
+                        Icons.Outlined.DateRange,
+                        compactTimeRange(activity.startTime, activity.endTime),
                     )
+                    activity.joinUserText?.let { PuActivityMetaRow(Icons.Outlined.Group, it) }
                 }
-            }
-            Spacer(Modifier.width(4.dp))
-            if (activity.credit > 0.0) {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(10.dp),
+            },
+            trailingContent = {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text(
-                        "${creditText(activity.credit)} 学时",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
+                    if (activity.credit > 0.0) PuCreditBadge(activity.credit)
+                    if (trailing != null) {
+                        trailing()
+                    } else {
+                        activity.statusChipText?.let { PuStatusChip(it) }
+                    }
                 }
-            }
-            if (trailing != null) {
-                Spacer(Modifier.width(2.dp))
-                trailing()
+            },
+        )
+    }
+}
+
+@Composable
+private fun PuActivityMetaRow(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 活动封面：有图用图，没图或加载失败时退回落款图标。 */
+@Composable
+internal fun PuActivityLogo(activity: PuActivity, size: Dp) {
+    val bitmap = activity.logoUrl?.let { rememberRemoteIcon(it) }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            modifier = Modifier
+                .size(size)
+                .clip(MaterialTheme.shapes.medium),
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Surface(
+            modifier = Modifier.size(size),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.primaryContainer,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.School,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
             }
         }
     }
 }
+
+@Composable
+internal fun PuCreditBadge(credit: Double) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Text(
+            "${creditText(credit)} 学时",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+internal fun PuStatusChip(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = RoundedCornerShape(50),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            maxLines = 1,
+        )
+    }
+}
+
+/*
+ * 列表 / 详情的附加字段：PuActivity 只冻结了固定字段，上游多出来的
+ * 封面、报名人数、状态、简介等按需从 raw 里读，读不到就不展示。
+ */
+
+internal fun PuActivity.rawString(vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+    when (val value = raw.opt(key)) {
+        null, JSONObject.NULL -> null
+        is String -> value.trim().takeIf { it.isNotBlank() }
+        else -> value.toString().trim().takeIf { it.isNotBlank() }
+    }
+}
+
+internal fun PuActivity.rawInt(vararg keys: String): Int? = keys.firstNotNullOfOrNull { key ->
+    when (val value = raw.opt(key)) {
+        is Number -> value.toInt()
+        is String -> value.trim().toIntOrNull()
+        else -> null
+    }
+}
+
+internal val PuActivity.logoUrl: String?
+    get() = rawString("logo", "activityLogo", "logoUrl", "icon", "cover")
+
+internal val PuActivity.statusChipText: String?
+    get() = rawString("joinStatusName", "statusName", "status")
+        ?: raw.optJSONObject("joinStatus")?.let { join ->
+            listOf("name", "cancelName", "ruleName")
+                .mapNotNull { join.optString(it).trim().takeIf { s -> s.isNotBlank() } }
+                .distinct()
+                .joinToString(" · ")
+                .takeIf { it.isNotBlank() }
+        }
+
+internal val PuActivity.categoryNameText: String?
+    get() = rawString("categoryName", "category", "typeName")
+
+internal val PuActivity.creatorNameText: String?
+    get() = rawString("creatorName", "publisher", "organizer")
+
+internal val PuActivity.descriptionText: String?
+    get() = rawString(
+        "description", "activityDescription", "intro", "content",
+        "details", "activityContent",
+    )
+
+internal val PuActivity.joinUserText: String?
+    get() {
+        val joined = rawInt("joinUserCount", "joinedUserCount")
+        val allow = rawInt("allowUserCount", "maxUserCount")
+        return when {
+            joined == null && allow == null -> null
+            joined == null -> "限额 $allow 人"
+            allow == null || allow <= 0 -> "$joined 人已报名"
+            else -> "$joined/$allow 人"
+        }
+    }
+
+internal val PuActivity.attaches: List<Pair<String, String>>
+    get() {
+        val array = raw.optJSONArray("attaches") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val url = item.optString("url").trim().ifBlank {
+                    item.optString("path").trim().ifBlank { item.optString("fileUrl").trim() }
+                }
+                if (url.isBlank()) continue
+                val name = item.optString("name").trim().ifBlank {
+                    item.optString("fileName").trim().ifBlank { "附件 ${index + 1}" }
+                }
+                add(name to url)
+            }
+        }
+    }
 
 /** 列表底部的「加载更多」与终止提示。 */
 @Composable

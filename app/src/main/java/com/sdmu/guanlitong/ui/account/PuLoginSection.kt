@@ -1,34 +1,47 @@
 package com.sdmu.guanlitong.ui.account
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +50,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -49,19 +64,22 @@ import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.pu.PuCredStore
 import com.sdmu.guanlitong.data.pu.PuException
 import com.sdmu.guanlitong.data.pu.PuLoginApi
+import com.sdmu.guanlitong.data.pu.PuSchool
+import com.sdmu.guanlitong.data.pu.PuSchoolStore
+import com.sdmu.guanlitong.data.pu.PuSchoolsApi
+import com.sdmu.guanlitong.data.pu.filterSchools
 import com.sdmu.guanlitong.data.pu.mask
 import com.sdmu.guanlitong.data.pu.puMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** 山东管理学院的口袋校园 `school_go_id`（§6.4），允许用户在界面上改。 */
-private const val PU_DEFAULT_SCHOOL_ID = "208791531159552"
+/** 山东管理学院的第二课堂 `school_go_id`（§6.4），用户可在选校对话框里改。 */
 
 /** 服务端无文案时 401 的兜底提示（与 ui/pu 的 PU_AUTH_LOST 保持一致）。 */
 private const val PU_LOGIN_LOST = "登录已失效，请重新登录"
 
 /**
- * 「我的 → 口袋校园」的账号区，仿 [SdgyLoginSection]。
+ * 「我的 → 第二课堂」的账号区，仿 [SdgyLoginSection]。
  *
  * 与山管 App 的差异：
  * - PU 是 **token 授权**（密码只用于换 token），没有 session keeper、没有「被顶号自动重登」，
@@ -91,7 +109,13 @@ fun PuLoginSection(
 
     var username by remember(sid) { mutableStateOf(current.username) }
     var password by remember(sid) { mutableStateOf(store.passwordOf(sid).orEmpty()) }
-    var schoolId by rememberSaveable(sid) { mutableStateOf(PU_DEFAULT_SCHOOL_ID) }
+    val schoolStore = remember(context) { PuSchoolStore(context.applicationContext) }
+    var selectedSchool by rememberSaveable(sid) { mutableStateOf(schoolStore.selected()) }
+    var schoolDialogOpen by remember { mutableStateOf(false) }
+    var schools by remember { mutableStateOf(schoolStore.cachedSchools()) }
+    var schoolsLoading by remember { mutableStateOf(false) }
+    var schoolsError by remember { mutableStateOf<String?>(null) }
+    var schoolQuery by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberPassword by remember(sid) { mutableStateOf(current.hasPassword) }
     var loading by remember { mutableStateOf(false) }
@@ -107,6 +131,55 @@ fun PuLoginSection(
         messageIsError = true
     }
 
+    // 学校列表一次取全量，本地搜索；打开对话框时才拉取，列表为空才请求。
+    LaunchedEffect(schoolDialogOpen) {
+        if (!schoolDialogOpen || schools.isNotEmpty()) return@LaunchedEffect
+        schoolsLoading = true
+        schoolsError = null
+        try {
+            schools = PuSchoolsApi.fetch(context.applicationContext)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            schoolsError = e.puMessage()
+        } finally {
+            schoolsLoading = false
+        }
+    }
+
+    if (schoolDialogOpen) {
+        SchoolSearchDialog(
+            schools = schools,
+            query = schoolQuery,
+            loading = schoolsLoading,
+            error = schoolsError,
+            selectedGoId = selectedSchool.goId,
+            onQueryChange = { schoolQuery = it },
+            onSelect = { school ->
+                schoolStore.select(school)
+                selectedSchool = school
+                schoolDialogOpen = false
+            },
+            onDismiss = { schoolDialogOpen = false },
+            onReload = {
+                schools = emptyList()
+                schoolsError = null
+                schoolsLoading = true
+                scope.launch {
+                    try {
+                        schools = PuSchoolsApi.fetch(context.applicationContext)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        schoolsError = e.puMessage()
+                    } finally {
+                        schoolsLoading = false
+                    }
+                }
+            },
+        )
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -117,7 +190,7 @@ fun PuLoginSection(
 
         if (current.loggedIn) {
             LoggedInAccountCard(
-                title = "口袋校园账号",
+                title = "第二课堂账号",
                 name = current.nickname.ifBlank { current.username },
                 onSignOut = {
                     scope.launch {
@@ -135,7 +208,7 @@ fun PuLoginSection(
                 StaleTokenCard()
             }
             Text(
-                "账号密码仅用于登录口袋校园；登录信息加密保存在本机，不会在界面显示。",
+                "账号密码仅用于登录第二课堂；登录信息加密保存在本机，不会在界面显示。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -147,7 +220,7 @@ fun PuLoginSection(
             onValueChange = { username = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("学号 / 账号") },
-            placeholder = { Text("口袋校园登录账号") },
+            placeholder = { Text("第二课堂登录账号") },
             singleLine = true,
             enabled = !loading,
         )
@@ -175,17 +248,10 @@ fun PuLoginSection(
             },
         )
 
-        OutlinedTextField(
-            value = schoolId,
-            onValueChange = { schoolId = it.filter(Char::isDigit) },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("学校 go_id（学校标识）") },
-            singleLine = true,
+        SchoolSelectionField(
+            schoolName = selectedSchool.name,
             enabled = !loading,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            supportingText = {
-                Text("默认已填山东管理学院的 go_id；更换学校时，请填写目标学校提供的 go_id，不是学校编号。")
-            },
+            onClick = { schoolDialogOpen = true },
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -225,11 +291,11 @@ fun PuLoginSection(
             onClick = {
                 val user = username.trim()
                 val pw = password
-                val goId = schoolId.trim().toLongOrNull()?.takeIf { it > 0L }
+                val goId = selectedSchool.goId.toLongOrNull()?.takeIf { it > 0L }
                 when {
                     user.isEmpty() -> showError("请输入学号或账号")
                     pw.isEmpty() -> showError("请输入密码")
-                    goId == null -> showError("请填写有效的学校 go_id（正整数）")
+                    goId == null -> showError("请选择学校")
                     else -> scope.launch {
                         loading = true
                         message = null
@@ -283,11 +349,11 @@ fun PuLoginSection(
                 )
                 Spacer(Modifier.width(10.dp))
             }
-            Text(if (current.loggedIn) "重新登录口袋校园" else "登录口袋校园")
+            Text(if (current.loggedIn) "重新登录第二课堂" else "登录第二课堂")
         }
 
         Text(
-            "账号密码仅用于登录口袋校园；登录信息加密保存在本机，不会在界面显示。",
+            "账号密码仅用于登录第二课堂；登录信息加密保存在本机，不会在界面显示。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -314,14 +380,14 @@ private fun TokenNotice() {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    "登录后即可使用口袋校园",
+                    "登录后即可使用第二课堂",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "登录信息用于保持口袋校园登录状态；不勾选「记住密码」时，本应用不会保存密码。",
+                    "登录信息用于保持第二课堂登录状态；不勾选「记住密码」时，本应用不会保存密码。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
@@ -365,4 +431,135 @@ private fun StaleTokenCard() {
             }
         }
     }
+}
+/** 学校只读字段：把点击叠在输入框上，按「选择学校」按钮对待。 */
+@Composable
+private fun SchoolSelectionField(
+    schoolName: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = schoolName,
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+            readOnly = true,
+            label = { Text("学校") },
+            leadingIcon = { Icon(Icons.Outlined.School, contentDescription = null) },
+            trailingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            supportingText = { Text("默认山东管理学院，可按校名或拼音首字母搜索更换。") },
+            singleLine = true,
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClickLabel = "选择学校",
+                    onClick = onClick,
+                ),
+        )
+    }
+}
+
+/** 官方学校列表的搜索选择框：全量列表 + 本地过滤，不做服务端搜索。 */
+@Composable
+private fun SchoolSearchDialog(
+    schools: List<PuSchool>,
+    query: String,
+    loading: Boolean,
+    error: String?,
+    selectedGoId: String,
+    onQueryChange: (String) -> Unit,
+    onSelect: (PuSchool) -> Unit,
+    onDismiss: () -> Unit,
+    onReload: () -> Unit,
+) {
+    val filtered = remember(schools, query) { filterSchools(schools, query) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择学校") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("搜索学校") },
+                    placeholder = { Text("校名，或拼音首字母") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                )
+                when {
+                    loading && schools.isEmpty() -> Box(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp) }
+
+                    error != null && schools.isEmpty() -> Column(
+                        Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = onReload) { Text("重试") }
+                    }
+
+                    filtered.isEmpty() -> Text(
+                        if (query.isBlank()) "暂时没有学校列表" else "没有匹配的学校",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp),
+                    )
+
+                    else -> LazyColumn(Modifier.fillMaxWidth()) {
+                        if (query.isBlank()) {
+                            filtered.groupBy { it.group }.forEach { (group, items) ->
+                                item(key = "group-$group") {
+                                    Text(
+                                        group,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                                    )
+                                }
+                                items(items, key = { it.goId }) { school ->
+                                    SchoolRow(school, school.goId == selectedGoId, onSelect)
+                                }
+                            }
+                        } else {
+                            items(filtered, key = { it.goId }) { school ->
+                                SchoolRow(school, school.goId == selectedGoId, onSelect)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun SchoolRow(school: PuSchool, selected: Boolean, onSelect: (PuSchool) -> Unit) {
+    ListItem(
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        headlineContent = { Text(school.name) },
+        trailingContent = if (selected) {
+            { Icon(Icons.Outlined.Check, contentDescription = "当前学校") }
+        } else {
+            null
+        },
+        modifier = Modifier.clickable { onSelect(school) },
+    )
 }

@@ -32,7 +32,7 @@ internal object PuRuntime {
     }
 
     /** 未登录 / 已清凭据时抛 401，交给 `puCall()` 统一处理。 */
-    fun requireApi(): PuApi = api ?: throw PuException("请先登录口袋校园", 401)
+    fun requireApi(): PuApi = api ?: throw PuException("请先登录第二课堂", 401)
 
     /** 保留给需要 Application 级 context 的场景（当前未使用）。 */
     fun contextOrNull(): Context? = appContext

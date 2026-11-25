@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Login
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,6 +85,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdmu.guanlitong.data.AccountStore
+import com.sdmu.guanlitong.data.FeatureCatalog
 import com.sdmu.guanlitong.data.SdgyPage
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.sdgy.SdgyAppCatalog
@@ -158,6 +160,8 @@ fun SdgyAppsContent(
     onGroupsChange: (List<SdgyAppGroup>) -> Unit = {},
     /** 长按某个功能，用来收藏。 */
     onLongPressEntry: ((SdgyAppEntry, Rect) -> Unit)? = null,
+    /** 已收藏的功能 ID，对应的胶囊会在图标前打星。 */
+    favoriteIds: Set<String> = emptySet(),
 ) {
     val context = LocalContext.current
     val repository = rememberSdgyRepository()
@@ -306,6 +310,7 @@ fun SdgyAppsContent(
                                 shownGroups.flatMap { it.apps }.distinctBy { it.id },
                                 onOpen = ::openEntry,
                                 onLongPress = onLongPressEntry,
+                                favoriteIds = favoriteIds,
                             )
                         } else {
                             AppGrid(
@@ -325,7 +330,12 @@ fun SdgyAppsContent(
                             }
                         }
                         Spacer(Modifier.height(10.dp))
-                        AppChipRows(group.apps, onOpen = ::openEntry, onLongPress = onLongPressEntry)
+                        AppChipRows(
+                            group.apps,
+                            onOpen = ::openEntry,
+                            onLongPress = onLongPressEntry,
+                            favoriteIds = favoriteIds,
+                        )
                     }
                 }
             } else {
@@ -521,10 +531,16 @@ private fun AppChipRows(
     apps: List<SdgyAppEntry>,
     onOpen: (SdgyAppEntry) -> Unit,
     onLongPress: ((SdgyAppEntry, Rect) -> Unit)? = null,
+    favoriteIds: Set<String> = emptySet(),
 ) {
     FlowChipRow(modifier = Modifier.fillMaxWidth()) {
         apps.forEach { entry ->
-            AppChip(entry = entry, onOpen = onOpen, onLongPress = onLongPress)
+            AppChip(
+                entry = entry,
+                onOpen = onOpen,
+                onLongPress = onLongPress,
+                favorited = FeatureCatalog.sdgyApp(entry).id in favoriteIds,
+            )
         }
     }
 }
@@ -535,6 +551,7 @@ private fun AppChip(
     entry: SdgyAppEntry,
     onOpen: (SdgyAppEntry) -> Unit,
     onLongPress: ((SdgyAppEntry, Rect) -> Unit)? = null,
+    favorited: Boolean = false,
 ) {
     val accent = ServiceCatalog.byId("sdgy")?.accent ?: MaterialTheme.colorScheme.primary
     // 长按时才取位置；用最新的布局坐标，避免闭包拿到过期的。
@@ -556,6 +573,15 @@ private fun AppChip(
                 .padding(horizontal = 11.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (favorited) {
+                Icon(
+                    Icons.Outlined.Star,
+                    contentDescription = "已收藏",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
             val remote = rememberRemoteIcon(entry.iconUrl)
             val page = entry.nativePage
             when {

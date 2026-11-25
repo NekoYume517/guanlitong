@@ -106,7 +106,7 @@ private sealed interface Dest {
     data class Account(val serviceId: String) : Dest
     data class Jwxt(val page: JwxtPage = JwxtPage.Timetable) : Dest
     data class Sdgy(val page: SdgyPage = SdgyPage.Hub) : Dest
-    /** 口袋校园原生页面；[activityId] 非空表示在活动列表之上叠加活动详情。 */
+    /** 第二课堂原生页面；[activityId] 非空表示在活动列表之上叠加活动详情。 */
     data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(

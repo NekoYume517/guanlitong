@@ -2,37 +2,46 @@ package com.sdmu.guanlitong.ui.pu
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.location.Geocoder
 import android.location.LocationManager
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,16 +52,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.pu.PuActions
 import com.sdmu.guanlitong.data.pu.PuActivity
 import com.sdmu.guanlitong.data.pu.PuSignStatus
-import com.sdmu.guanlitong.ui.sdgy.SdgyKeyValueRow
+import com.sdmu.guanlitong.ui.components.rememberRemoteIcon
 import com.sdmu.guanlitong.ui.sdgy.SdgyLoading
-import com.sdmu.guanlitong.ui.sdgy.SdgyScaffold
-import com.sdmu.guanlitong.ui.sdgy.SdgySectionTitle
 import com.sdmu.guanlitong.ui.sdgy.hasPermission
 import com.sdmu.guanlitong.ui.sdgy.rememberPermissionRequester
 import kotlinx.coroutines.Dispatchers
@@ -61,12 +71,13 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 /**
- * 活动详情：基本信息 + 签到状态 + 报名/取消/签到/签退 + 生成签到码入口。
+ * 活动详情：封面与摘要 + 活动信息 + 签到状态 + 签到地址 + 报名/签到操作 + 生成签到码。
  *
  * 报名与签到的时间窗判定以服务端为准：按钮不做本地启用/禁用，
  * 被拒时直接把 `PuException.message`（§4.4 的逐字文案）显示在操作区上方。
  * 签到/签退地址优先用输入框，其次活动 `signPlace → address`，最后退回「定位签到」。
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PuActivityDetailScreen(
     activityId: Long,
@@ -89,6 +100,7 @@ fun PuActivityDetailScreen(
     var locating by remember { mutableStateOf(false) }
     var actionMessage by remember { mutableStateOf<String?>(null) }
     var address by remember { mutableStateOf("") }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(refresh, store.loggedIn) {
         if (!store.loggedIn) return@LaunchedEffect
@@ -153,14 +165,27 @@ fun PuActivityDetailScreen(
         }
     }
 
-    SdgyScaffold(
-        title = "活动详情",
-        onBack = onBack,
+    Scaffold(
         modifier = modifier,
-        actions = {
-            IconButton(onClick = { refresh++ }, enabled = !loading && !busy) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-            }
+        topBar = {
+            MediumFlexibleTopAppBar(
+                title = { Text("活动详情") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { refresh++ }, enabled = !loading && !busy) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+                scrollBehavior = scrollBehavior,
+            )
         },
     ) { padding ->
         when {
@@ -175,188 +200,87 @@ fun PuActivityDetailScreen(
             activity != null -> {
                 val a = activity!!
                 LazyColumn(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = padding.calculateTopPadding() + 8.dp,
+                        bottom = padding.calculateBottomPadding() + 28.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    item { HeaderCard(a) }
-
-                    item {
-                        Card(
-                            Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            ),
-                        ) {
-                            Column(Modifier.padding(14.dp)) {
-                                SdgySectionTitle("时间安排")
-                                Spacer(Modifier.height(6.dp))
-                                SdgyKeyValueRow("报名", timeRange(a.joinStartTime, a.joinEndTime))
-                                SdgyKeyValueRow("活动", timeRange(a.startTime, a.endTime))
-                                SdgyKeyValueRow("签到开始", shortTime(a.signStartTime).ifBlank { "—" })
-                                SdgyKeyValueRow("签退开始", shortTime(a.signOutStartTime).ifBlank { "—" })
-                                if (a.canSignOutTime > 0) {
-                                    SdgyKeyValueRow("签退时限", "${a.canSignOutTime} 分钟")
-                                }
-                            }
-                        }
+                    a.logoUrl?.let { url ->
+                        item { CoverImage(url, a.name) }
                     }
 
-                    item { SignStatusCard(status) }
+                    item { ActivitySummary(a, status) }
+
+                    item { SectionTitle("活动信息") }
+                    item { ActivityInfoSurface(a, status) }
+
+                    item { SectionTitle("签到状态") }
+                    item { SignStatusSurface(status) }
 
                     item {
-                        Card(
-                            Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            ),
-                        ) {
-                            Column(Modifier.padding(14.dp)) {
-                                SdgySectionTitle("签到地址")
-                                Spacer(Modifier.height(6.dp))
-                                OutlinedTextField(
-                                    value = address,
-                                    onValueChange = { address = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = { Text(signAddress()) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(14.dp),
-                                    trailingIcon = {
-                                        IconButton(onClick = { locate() }, enabled = !locating) {
-                                            if (locating) {
-                                                CircularProgressIndicator(
-                                                    Modifier.width(18.dp).height(18.dp),
-                                                    strokeWidth = 2.dp,
-                                                )
-                                            } else {
-                                                Icon(
-                                                    Icons.Outlined.MyLocation,
-                                                    contentDescription = "定位",
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "留空时使用活动签到地点；已签到/已签退的记录不会覆盖。",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        SignAddressSurface(
+                            address = address,
+                            fallback = signAddress(),
+                            locating = locating,
+                            onAddressChange = { address = it },
+                            onLocate = { locate() },
+                        )
                     }
 
                     if (actionMessage != null) {
+                        item { ActionMessageCard(actionMessage.orEmpty()) { actionMessage = null } }
+                    }
+
+                    item {
+                        ActionSection(
+                            busy = busy,
+                            onJoin = { runAction("报名成功") { PuActions.join(activityId) } },
+                            onCancel = { runAction("已取消报名") { PuActions.cancel(activityId) } },
+                            onSignIn = {
+                                runAction("签到成功") { PuActions.signIn(activityId, signAddress()) }
+                            },
+                            onSignOut = {
+                                runAction("签退成功") { PuActions.signOut(activityId, signAddress()) }
+                            },
+                        )
+                    }
+
+                    item { SignCodeCard(onOpenSignCode = { onOpenSignCode(activityId) }) }
+
+                    item { SectionTitle("活动详情") }
+                    item {
+                        Text(
+                            a.descriptionText ?: "暂无更多活动说明。",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+
+                    val attaches = a.attaches
+                    if (attaches.isNotEmpty()) {
+                        item { SectionTitle("附件") }
                         item {
-                            Surface(
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        actionMessage.orEmpty(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    TextButton(onClick = { actionMessage = null }) { Text("知道了") }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                "报名",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                FilledTonalButton(
-                                    onClick = { runAction("报名成功") { PuActions.join(activityId) } },
-                                    enabled = !busy,
-                                ) { Text("报名") }
-                                OutlinedButton(
-                                    onClick = { runAction("已取消报名") { PuActions.cancel(activityId) } },
-                                    enabled = !busy,
-                                ) { Text("取消报名") }
-                            }
-
-                            Text(
-                                "签到",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                FilledTonalButton(
-                                    onClick = {
-                                        runAction("签到成功") {
-                                            PuActions.signIn(activityId, signAddress())
-                                        }
-                                    },
-                                    enabled = !busy,
-                                ) { Text("签到") }
-                                OutlinedButton(
-                                    onClick = {
-                                        runAction("签退成功") {
-                                            PuActions.signOut(activityId, signAddress())
-                                        }
-                                    },
-                                    enabled = !busy,
-                                ) { Text("签退") }
-                            }
-                            if (busy) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(
-                                        Modifier.width(16.dp).height(16.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "正在提交…",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        Card(
-                            Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            ),
-                        ) {
-                            Row(
-                                Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "生成签到码",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    )
-                                    Text(
-                                        "主办方用这个活动的动态二维码让同学扫码签到。",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                                    )
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                FilledTonalButton(onClick = { onOpenSignCode(activityId) }) {
-                                    Text("打开")
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                attaches.forEach { (name, url) ->
+                                    OutlinedButton(
+                                        onClick = {
+                                            runCatching {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(intent)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Icon(Icons.Outlined.AttachFile, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
                                 }
                             }
                         }
@@ -368,84 +292,278 @@ fun PuActivityDetailScreen(
 }
 
 @Composable
-private fun HeaderCard(activity: PuActivity) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(Modifier.padding(18.dp)) {
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleLargeEmphasized)
+}
+
+@Composable
+private fun CoverImage(url: String, name: String) {
+    val bitmap = rememberRemoteIcon(url)
+    if (bitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = bitmap,
+            contentDescription = name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(MaterialTheme.shapes.extraLarge),
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+@Composable
+private fun ActivitySummary(activity: PuActivity, status: PuSignStatus?) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            activity.statusChipText?.let { PuStatusChip(it) }
+            activity.categoryNameText?.let { PuTagChip(it) }
+            if (activity.credit > 0.0) PuCreditBadge(activity.credit)
+        }
+        Text(
+            activity.name.ifBlank { "未命名活动" },
+            style = MaterialTheme.typography.headlineSmallEmphasized,
+        )
+        activity.creatorNameText?.let {
             Text(
-                activity.name.ifBlank { "未命名活动" },
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                timeRange(activity.startTime, activity.endTime),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-            )
-            val place = activity.signPlace.ifBlank { activity.address }
-            if (place.isNotBlank()) {
-                Text(
-                    place,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-                )
-            }
-            if (activity.credit > 0.0) {
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    Text(
-                        "${creditText(activity.credit)} 学时",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
-                    )
-                }
+        }
+        if (status != null) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (status.isSignIn) PuStatusChip("已签到")
+                if (status.isSignOut) PuStatusChip("已签退")
             }
         }
     }
 }
 
 @Composable
-private fun SignStatusCard(status: PuSignStatus?) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+private fun PuTagChip(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(50),
     ) {
-        Column(Modifier.padding(14.dp)) {
-            SdgySectionTitle("签到状态")
-            Spacer(Modifier.height(6.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+private fun ActivityInfoSurface(activity: PuActivity, status: PuSignStatus?) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailRow("报名时间", timeRange(activity.joinStartTime, activity.joinEndTime))
+            DetailRow("活动时间", timeRange(activity.startTime, activity.endTime))
+            DetailRow("活动地点", activity.address.takeIf { it.isNotBlank() } ?: "待公布")
+            activity.joinUserText?.let { DetailRow("已报名", it) }
+            if (activity.credit > 0.0) DetailRow("学时", "${creditText(activity.credit)} 学时")
+            activity.rawString("signType")?.let { DetailRow("签到方式", it) }
+            DetailRow("签到开始", shortTime(activity.signStartTime).ifBlank { "待公布" })
+            if (activity.signOutStartTime.isNotBlank()) {
+                DetailRow("签退开始", shortTime(activity.signOutStartTime))
+            }
+            if (activity.canSignOutTime > 0) {
+                DetailRow("签退时限", "${activity.canSignOutTime} 分钟")
+            }
+            activity.rawInt("signInUserCount")?.let { DetailRow("已签到", "$it 人") }
+            activity.rawString("allowNames")?.let { DetailRow("报名范围", it) }
+            activity.rawString("contact")?.let { DetailRow("联系人", it) }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.width(72.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun SignStatusSurface(status: PuSignStatus?) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             if (status == null) {
                 Text(
-                    "暂时读不到签到状态，可下拉刷新重试。",
-                    style = MaterialTheme.typography.bodySmall,
+                    "暂时读不到签到状态，可刷新重试。",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                SdgyKeyValueRow(
+                DetailRow(
                     "签到",
                     if (status.isSignIn) "已签到 ${shortTime(status.signInTime)}" else "未签到",
                 )
-                if (status.isSignIn && status.signInAddress.isNotBlank()) {
-                    SdgyKeyValueRow("签到地点", status.signInAddress)
-                }
-                SdgyKeyValueRow(
+                DetailRow(
                     "签退",
                     if (status.isSignOut) "已签退 ${shortTime(status.signOutTime)}" else "未签退",
                 )
+                status.signInAddress.takeIf { it.isNotBlank() }?.let {
+                    DetailRow("签到地点", it)
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun SignAddressSurface(
+    address: String,
+    fallback: String,
+    locating: Boolean,
+    onAddressChange: (String) -> Unit,
+    onLocate: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("签到地址", style = MaterialTheme.typography.titleMediumEmphasized)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = address,
+                onValueChange = onAddressChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(fallback) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                trailingIcon = {
+                    IconButton(onClick = onLocate, enabled = !locating) {
+                        if (locating) {
+                            CircularProgressIndicator(
+                                Modifier.width(18.dp).height(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Outlined.MyLocation, contentDescription = "定位")
+                        }
+                    }
+                },
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "留空时使用活动签到地点；已签到/已签退的记录不会覆盖。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionMessageCard(text: String, onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("知道了") }
+        }
+    }
+}
+
+@Composable
+private fun ActionSection(
+    busy: Boolean,
+    onJoin: () -> Unit,
+    onCancel: () -> Unit,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(onClick = onJoin, enabled = !busy) { Text("报名") }
+            OutlinedButton(onClick = onCancel, enabled = !busy) { Text("取消报名") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(onClick = onSignIn, enabled = !busy) { Text("签到") }
+            OutlinedButton(onClick = onSignOut, enabled = !busy) { Text("签退") }
+        }
+        if (busy) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    Modifier.width(16.dp).height(16.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "正在提交…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignCodeCard(onOpenSignCode: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.largeIncreased,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("生成签到码", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "主办方用这个活动的动态二维码让同学扫码签到。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            FilledTonalButton(onClick = onOpenSignCode) { Text("打开签到码") }
         }
     }
 }

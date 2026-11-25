@@ -153,7 +153,7 @@ fun AccountScreen(
                 )
             }
 
-            // 口袋校园只用 App 账号，没有网页地址，不需要提示。
+            // 第二课堂只用 App 账号，没有网页地址，不需要提示。
             if (serviceUrl.isBlank() && service.id != "pu") {
                 WarningCard(
                     text = "这个服务暂时用不了。",
