@@ -94,6 +94,8 @@ fun QuickActionEditorSheet(
     sdgyGroups: List<SdgyAppGroup>,
     /** 已登录的服务 ID；候选区只展示已登录服务的入口。 */
     loggedInServices: Set<String>,
+    /** 这块卡片最多能放几个入口：小号卡片只有两个槽位。 */
+    maxActions: Int = MAX_ACTIONS,
     onRefreshSdgy: suspend () -> List<SdgyAppGroup>,
     onDismiss: () -> Unit,
 ) {
@@ -102,7 +104,7 @@ fun QuickActionEditorSheet(
     val context = androidx.compose.ui.platform.LocalContext.current
     val cachedGroups = remember { com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.load(context)?.groups.orEmpty() }
     val availableGroups = sdgyGroups.ifEmpty { cachedGroups }
-    var ids by remember(widgetId) { mutableStateOf(storedIds) }
+    var ids by remember(widgetId) { mutableStateOf(storedIds.take(maxActions)) }
     var isReordering by remember { mutableStateOf(false) }
     // 拖拽松手后排序库还要播放让位动画，onSettle 在动画结束才回调；
     // 这段时间点「完成」不能直接把编辑页关掉，否则排序会丢。
@@ -135,7 +137,11 @@ fun QuickActionEditorSheet(
         }
     }
 
-    LaunchedEffect(widgetId, storedIds) { ids = storedIds }
+    // 小号卡片超出槽位的旧条目真正删掉，否则移除一个后会被打回满编，看起来像没生效。
+    LaunchedEffect(widgetId, maxActions) {
+        if (storedIds.size > maxActions) store.setOrder(widgetId, storedIds.take(maxActions))
+    }
+    LaunchedEffect(widgetId, storedIds, maxActions) { ids = storedIds.take(maxActions) }
     LaunchedEffect(pendingDismiss, awaitingSettle) {
         if (!pendingDismiss) return@LaunchedEffect
         // onSettle 会把 awaitingSettle 置回 false 并重启本效果；最多等 800ms 兜底。
@@ -166,7 +172,7 @@ fun QuickActionEditorSheet(
                     )
                 }
                 Text(
-                    "${features.size}/$MAX_ACTIONS",
+                    "${features.size}/$maxActions",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -315,7 +321,7 @@ fun QuickActionEditorSheet(
                             EditorCandidateRow(
                                 feature = candidate,
                                 selected = candidate.id in ids,
-                                canAdd = ids.size < MAX_ACTIONS,
+                                canAdd = ids.size < maxActions,
                                 onClick = {
                                     // 焦点绑定稳定的功能 ID，不绑定列表位置；移除或排序后不能误改另一个入口。
                                     val replaceIndex = focusId?.let { ids.indexOf(it) }?.takeIf { it >= 0 }
@@ -330,7 +336,7 @@ fun QuickActionEditorSheet(
                                     } else if (candidate.id in ids) {
                                         ids = ids - candidate.id
                                         store.remove(widgetId, candidate.id)
-                                    } else if (ids.size < MAX_ACTIONS) {
+                                    } else if (ids.size < maxActions) {
                                         ids = ids + candidate.id
                                         store.add(widgetId, candidate.id)
                                     }

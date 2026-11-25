@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.sdmu.guanlitong.data.QuickActionStore
 import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.WidgetSize
 
@@ -107,40 +108,31 @@ internal fun QuickActionsContent(
         }
 
         BoxWithConstraints {
+            // 小号卡片只放得下两个入口；旧版本存下的多余条目不再显示。
+            val visible = features.take(QuickActionStore.maxActionsFor(size))
             // 卡片的实际宽度由首页网格决定，可能比配置的尺寸窄得多：
             // 窄的时候并排两列会把「成绩查询」这类四字标题压成省略号，改成整行入口。
             val narrow = maxWidth < 200.dp
             if (narrow) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    features.forEachIndexed { index, feature ->
+                    visible.forEachIndexed { index, feature ->
                         Entry(index, feature, Modifier.fillMaxWidth(), QuickActionKind.Mini)
                     }
                 }
             } else {
                 when (size) {
                     WidgetSize.Small -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (features.size == 2) {
-                            features.forEachIndexed { index, feature ->
-                                Entry(index, feature, Modifier.fillMaxWidth())
-                            }
-                        } else {
-                            features.chunked(2).forEachIndexed { rowIndex, row ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    row.forEachIndexed { columnIndex, feature ->
-                                        Entry(rowIndex * 2 + columnIndex, feature, Modifier.weight(1f))
-                                    }
-                                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-                                }
-                            }
+                        visible.forEachIndexed { index, feature ->
+                            Entry(index, feature, Modifier.fillMaxWidth())
                         }
                     }
                     WidgetSize.Medium -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        features.forEachIndexed { index, feature ->
+                        visible.forEachIndexed { index, feature ->
                             Entry(index, feature, Modifier.weight(1f))
                         }
                     }
                     WidgetSize.Large -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        features.chunked(2).forEachIndexed { rowIndex, row ->
+                        visible.chunked(2).forEachIndexed { rowIndex, row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 row.forEachIndexed { columnIndex, feature ->
                                     Entry(rowIndex * 2 + columnIndex, feature, Modifier.weight(1f))

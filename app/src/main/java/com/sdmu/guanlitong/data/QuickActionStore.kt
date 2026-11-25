@@ -145,6 +145,9 @@ class QuickActionStore(
 
     companion object {
         const val MAX_ACTIONS = 4
+
+        /** 小号快捷功能只放得下两个入口，中号和大号仍是 [MAX_ACTIONS] 个。 */
+        fun maxActionsFor(size: WidgetSize): Int = if (size == WidgetSize.Small) 2 else MAX_ACTIONS
         private const val KEY_BY_WIDGET = "feature_ids_by_widget"
         private const val KEY_LEGACY_IDS = "feature_ids"
     }

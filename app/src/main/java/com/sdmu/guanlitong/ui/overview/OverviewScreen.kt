@@ -99,6 +99,7 @@ import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.DashboardItem
 import com.sdmu.guanlitong.data.DashboardStore
 import com.sdmu.guanlitong.data.FeatureCatalog
+import com.sdmu.guanlitong.data.QuickActionStore
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
@@ -477,6 +478,8 @@ fun OverviewScreen(
     }
     val editorWidgetId = quickActionState.editorWidgetId
     if (quickActionState.editorOpen && editorWidgetId != null) {
+        // 小号快捷功能只有两个槽位，编辑页的计数和添加上限都跟着卡片的尺寸走。
+        val editorSize = items.firstOrNull { it.id == editorWidgetId }?.size ?: WidgetSize.Medium
         QuickActionEditorSheet(
             store = quickActions,
             widgetId = editorWidgetId,
@@ -484,6 +487,7 @@ fun OverviewScreen(
             selectedFeatures = quickFeaturesFor(editorWidgetId),
             sdgyGroups = sdgyGroups,
             loggedInServices = accounts.filterValues { it.loggedIn }.keys,
+            maxActions = QuickActionStore.maxActionsFor(editorSize),
             onRefreshSdgy = {
                 // 未登录山管、服务器关机或断网都可能失败；失败时退回已有分组，不能影响编辑页打开。
                 runCatching {
