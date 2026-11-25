@@ -2,6 +2,7 @@ package com.sdmu.guanlitong.data
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.ui.graphics.Color
@@ -39,15 +40,26 @@ object ServiceCatalog {
             icon = Icons.Outlined.PhoneAndroid,
             accent = Color(0xFF1E9E6A),
         ),
+SchoolService(
+            id = "pu",
+            name = "口袋校园",
+            summary = "活动报名 · 签到签退 · 学时统计",
+            defaultUrl = "",
+            loginMode = LoginMode.CREDENTIAL,
+            icon = Icons.Outlined.EventAvailable,
+            accent = Color(0xFFE0457B),
+            configurable = false,
+            requiresAccount = true,
+        ),
     )
 
-    /** 「功能」页顶部的分类：教务系统、山管 App。 */
+    /** 「功能」页顶部的分类：教务系统、山管 App、口袋校园。 */
     val featureServices: List<SchoolService>
-        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" }
+        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" }
 
     /** 「我的」与概览「账号状态」展示需要独立登录的服务；抢课助手只作为数据源。 */
     val accountServices: List<SchoolService>
-        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" }
+        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" }
 
     fun byId(id: String): SchoolService? = services.firstOrNull { it.id == id }
 }
