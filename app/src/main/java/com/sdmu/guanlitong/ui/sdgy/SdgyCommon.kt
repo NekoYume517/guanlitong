@@ -1,7 +1,11 @@
 package com.sdmu.guanlitong.ui.sdgy
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -143,6 +147,18 @@ fun QrImage(text: String, modifier: Modifier = Modifier, sizePx: Int = 720) {
         )
     }
 }
+
+/** 申请单个权限，回调结果；相机等能力由调用方在拿到授权后再使用。 */
+@Composable
+fun rememberPermissionRequester(onResult: (Boolean) -> Unit): (String) -> Unit {
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> onResult(granted) }
+    return { permission -> launcher.launch(permission) }
+}
+
+fun Context.hasPermission(permission: String): Boolean =
+    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
 /** 页面异步任务里的错误文案：保留业务原因，不把异常类名或协议细节交给用户。 */
 fun Throwable.sdgyMessage(): String = when {
