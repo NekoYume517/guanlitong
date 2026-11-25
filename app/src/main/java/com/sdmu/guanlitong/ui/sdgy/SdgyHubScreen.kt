@@ -102,8 +102,8 @@ import kotlinx.coroutines.withContext
  * 山管 App 的功能总页。
  *
  * 版式对齐官方「应用」页：服务端按分类下发的应用，四列图标网格。
- * 官方条目绝大多数是网页，点开进 [SdgyWebScreen]；课表、付款码、扫一扫、
- * 请销假、小白超人、宿舍用电则换成我们自己的原生页面。
+ * 官方条目绝大多数是网页，点开进 [SdgyWebScreen]；课表、付款码、
+ * 请销假、宿舍用电则换成我们自己的原生页面。
  */
 @Composable
 fun SdgyHubScreen(

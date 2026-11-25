@@ -74,7 +74,6 @@ import sh.calvin.reorderable.ReorderableRow
  * 已添加到快捷区的卡片不受影响，退出登录后仍保留原绑定。
  */
 private fun ServiceFeature.availableFor(loggedIn: Set<String>): Boolean = when {
-    serviceId == "other" -> true
     grabSourceOnly -> "grab" in loggedIn
     // 教务功能官方与抢课助手共用，任一已登录的教务账号都能打开（数据来源在教务页切换）。
     serviceId == "jwxt" -> "jwxt" in loggedIn || "grab" in loggedIn

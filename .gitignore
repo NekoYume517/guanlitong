@@ -22,3 +22,5 @@ keystore.properties
 *.pem
 *.key
 shot_*.txt
+# 本地测试截图（adb 连拍 / 录屏拆帧）
+.shot/
