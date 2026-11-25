@@ -66,7 +66,7 @@ class DesktopWidgetConfigActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("编辑桌面卡片") },
+                            title = { Text("编辑小组件") },
                             navigationIcon = {
                                 IconButton(onClick = ::finish) {
                                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
@@ -85,7 +85,7 @@ class DesktopWidgetConfigActivity : ComponentActivity() {
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
                                     .height(50.dp),
-                            ) { Text("保存并更新桌面卡片") }
+                            ) { Text("保存并更新小组件") }
                         }
                     },
                 ) { padding ->

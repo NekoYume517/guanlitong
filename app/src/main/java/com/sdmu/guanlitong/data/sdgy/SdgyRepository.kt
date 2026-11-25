@@ -62,7 +62,7 @@ class SdgyRepository(context: Context) {
 
     private fun newClient(): SdgyClient {
         val session = store.load()?.takeIf { it.hasSession }
-            ?: throw SdgyException("尚未登录山管 App，请先到「我的 → 山管 App」登录", "not_login")
+            ?: throw SdgyException("还没登录山管 App，先到「我的 → 山管 App」登录", "not_login")
         return SdgyClient(store.deviceId(), session)
     }
 }

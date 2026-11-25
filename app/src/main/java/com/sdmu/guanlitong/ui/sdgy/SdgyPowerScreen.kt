@@ -114,7 +114,7 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             SdgyPowerApi.buildings(area.id)
         }
         buildings = list
-        if (list.isEmpty()) error = "楼栋列表加载失败，请稍后重试"
+        if (list.isEmpty()) error = "楼栋列表没加载出来"
     }
 
     LaunchedEffect(selection.room, tick) {
@@ -133,7 +133,7 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         daily = result.third
         when {
             result.first == null -> error = "没有找到这个房间的电表"
-            result.second == null -> error = "用电数据加载失败，请重试"
+            result.second == null -> error = "用电数据没加载出来"
         }
         loading = false
     }

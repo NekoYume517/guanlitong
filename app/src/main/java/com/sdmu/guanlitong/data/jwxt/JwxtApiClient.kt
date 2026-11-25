@@ -510,7 +510,7 @@ class JwxtApiClient(
 
     private fun requireSession() {
         if (baseUrl.isBlank()) throw JwxtException("尚未配置教务系统地址")
-        if (cookie.isBlank()) throw JwxtSessionExpiredException("尚未登录教务系统，请先登录")
+        if (cookie.isBlank()) throw JwxtSessionExpiredException("还没登录教务系统")
     }
 
     /** 先 GET 一次教务首页确认会话，避免直接 POST 数据接口被网关拦成 901。 */

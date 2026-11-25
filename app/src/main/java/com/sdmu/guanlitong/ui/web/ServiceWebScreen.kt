@@ -110,7 +110,7 @@ fun ServiceWebScreen(
                         },
                         enabled = currentUrl.isNotBlank(),
                     ) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器中打开")
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器打开")
                     }
                 },
             )
@@ -129,7 +129,7 @@ fun ServiceWebScreen(
                     modifier = Modifier.padding(32.dp),
                 ) {
                     Text(
-                        text = "${service.name}暂时不可用",
+                        text = "${service.name}暂时用不了",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     TextButton(onClick = onBack) { Text("返回") }

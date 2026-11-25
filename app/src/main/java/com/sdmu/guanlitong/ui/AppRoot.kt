@@ -2,6 +2,7 @@ package com.sdmu.guanlitong.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,6 +46,7 @@ import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.AppRepository
 import com.sdmu.guanlitong.data.CookieUtils
 import com.sdmu.guanlitong.data.FeatureAction
+import com.sdmu.guanlitong.data.OnboardingPrefs
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
@@ -69,6 +71,7 @@ import com.sdmu.guanlitong.ui.jwxt.JwxtScreen
 import com.sdmu.guanlitong.ui.jwxt.JwxtSelectionScreen
 import com.sdmu.guanlitong.ui.jwxt.JwxtTasksScreen
 import com.sdmu.guanlitong.ui.mine.MineScreen
+import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyHubScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyPayScreen
@@ -104,6 +107,13 @@ private sealed interface Dest {
 fun AppRoot(repository: AppRepository) {
     val context = LocalContext.current
     val accounts by repository.accounts.accounts.collectAsState()
+
+    // 首次安装、且还没有任何已登录账号时才引导；看过或跳过就写标记，之后不再出现。
+    var showOnboarding by remember {
+        mutableStateOf(
+            OnboardingPrefs.shouldShow(context) && accounts.values.none { it.loggedIn }
+        )
+    }
 
     val jwxtSource by repository.settings.jwxtSource.collectAsState()
     val jwxtService = ServiceCatalog.byId("jwxt")!!
@@ -635,5 +645,29 @@ fun AppRoot(repository: AppRepository) {
                 updateState = UpdateState.Idle
             },
         )
+
+        // 引导盖在最上层；跳过后直接进入应用，不再重复出现。
+        AnimatedVisibility(
+            visible = showOnboarding,
+            enter = fadeIn(tween(240)),
+            exit = fadeOut(tween(180)),
+        ) {
+            OnboardingScreen(
+                onSkip = {
+                    OnboardingPrefs.markDone(context)
+                    showOnboarding = false
+                },
+                onAddAccount = {
+                    OnboardingPrefs.markDone(context)
+                    showOnboarding = false
+                    tab = 2
+                    goForward(Dest.Account("jwxt"))
+                },
+                onFinish = {
+                    OnboardingPrefs.markDone(context)
+                    showOnboarding = false
+                },
+            )
+        }
     }
 }

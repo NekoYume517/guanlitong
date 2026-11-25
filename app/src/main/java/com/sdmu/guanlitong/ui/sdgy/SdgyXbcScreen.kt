@@ -152,7 +152,7 @@ fun SdgyXbcScreen(
         }
         readTokenNow { fresh ->
             if (fresh.isBlank()) {
-                unlockMsg = "尚未登录，请先在地图页登录"
+                unlockMsg = "还没登录，先在地图页登录"
             } else {
                 persistToken(fresh)
                 openConfirm(c)
@@ -162,7 +162,7 @@ fun SdgyXbcScreen(
 
     fun unlockNow() {
         if (token.isBlank()) {
-            unlockMsg = "尚未登录，请先在地图页登录"
+            unlockMsg = "还没登录，先在地图页登录"
             return
         }
         unlockMsg = "定位中…"
@@ -172,9 +172,8 @@ fun SdgyXbcScreen(
                 main.post {
                     unlockMsg = when {
                         result == "OK" -> "开锁成功"
-                        result == null -> "开锁失败，请检查网络后重试"
-                        result.startsWith("HTTP ") -> "开锁失败，请稍后重试"
-                        else -> "开锁失败：$result"
+                        result == null -> "开锁失败，网络没连上"
+                        else -> "开锁失败，再试一次"
                     }
                     if (result == "OK") {
                         main.postDelayed({ webRef?.reload() }, 800)
@@ -254,7 +253,7 @@ fun SdgyXbcScreen(
                         }
                     },
                 ) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器中打开")
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器打开")
                 }
                 TextButton(onClick = { showPermissions = true }) { Text("权限") }
             }
@@ -300,7 +299,7 @@ fun SdgyXbcScreen(
                                         return@post
                                     }
                                     readTokenNow { t ->
-                                        if (t.isBlank()) unlockMsg = "尚未登录，请先在地图页登录"
+                                        if (t.isBlank()) unlockMsg = "还没登录，先在地图页登录"
                                         else {
                                             persistToken(t)
                                             openConfirm(c)
@@ -363,7 +362,7 @@ fun SdgyXbcScreen(
                         onBackToMap = { page = "map" },
                         onUnlock = {
                             when {
-                                token.isBlank() -> unlockMsg = "尚未登录，请先在地图页登录"
+                                token.isBlank() -> unlockMsg = "还没登录，先在地图页登录"
                                 !armed -> { armed = true; unlockMsg = "再次确认将立即开锁" }
                                 !locationOk -> locationRequester(
                                     Manifest.permission.ACCESS_FINE_LOCATION)
@@ -500,7 +499,7 @@ private fun ConfirmPage(
             if (tokenMissing) {
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "尚未登录小白超人，请先在地图页登录后重新扫码",
+                    "还没登录小白超人，先在地图页登录再扫码",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )

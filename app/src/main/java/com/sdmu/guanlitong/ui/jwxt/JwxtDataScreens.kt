@@ -68,6 +68,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +88,7 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SelectionCourse
 import com.sdmu.guanlitong.data.jwxt.SelectionStatus
 import com.sdmu.guanlitong.data.jwxt.TeachingClass
+import com.sdmu.guanlitong.ui.format.formatDateTime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -99,9 +102,9 @@ import java.util.Locale
 // ── 页面共用的状态与外壳 ────────────────────────────────────
 
 private fun jwxtDataMessage(error: Throwable, fallback: String): String = when {
-    error is JwxtSessionExpiredException -> "登录状态已失效，请重新登录"
-    error is SocketTimeoutException -> "连接超时，请检查网络后重试"
-    error is UnknownHostException || error is ConnectException || error is IOException -> "网络连接失败，请检查网络后重试"
+    error is JwxtSessionExpiredException -> "登录已过期"
+    error is SocketTimeoutException -> "连接超时了"
+    error is UnknownHostException || error is ConnectException || error is IOException -> "网络没连上"
     error is JwxtException -> error.message
         ?.takeUnless { it.isBlank() || it.contains("HTTP") }
         ?: fallback
@@ -264,12 +267,12 @@ fun JwxtGradesScreen(
 
     LaunchedEffect(access, refreshToken, attempt, cookie) {
         if (origin.isBlank()) {
-            state = DataState.Failed("这个数据来源暂时不可用")
+            state = DataState.Failed("这个数据来源暂时用不了")
             return@LaunchedEffect
         }
         if (cookie.isBlank()) {
             state = DataState.Failed(
-                if (usingGrab) "尚未登录抢课助手" else "尚未登录教务系统",
+                if (usingGrab) "还没登录抢课助手" else "还没登录教务系统",
             )
             return@LaunchedEffect
         }
@@ -278,11 +281,11 @@ fun JwxtGradesScreen(
         state = try {
             DataState.Ready(client?.fetchGrades() ?: throw JwxtException("数据来源不可用"))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed("登录状态已失效，请重新登录")
+            DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
-            DataState.Failed(jwxtDataMessage(e, "读取成绩失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "成绩没加载出来"))
         } catch (e: Exception) {
-            DataState.Failed(jwxtDataMessage(e, "读取成绩失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "成绩没加载出来"))
         } finally {
             refreshing = false
         }
@@ -503,12 +506,12 @@ fun JwxtExamsScreen(
 
     LaunchedEffect(access, refreshToken, attempt, cookie) {
         if (origin.isBlank()) {
-            state = DataState.Failed("这个数据来源暂时不可用")
+            state = DataState.Failed("这个数据来源暂时用不了")
             return@LaunchedEffect
         }
         if (cookie.isBlank()) {
             state = DataState.Failed(
-                if (usingGrab) "尚未登录抢课助手" else "尚未登录教务系统",
+                if (usingGrab) "还没登录抢课助手" else "还没登录教务系统",
             )
             return@LaunchedEffect
         }
@@ -517,11 +520,11 @@ fun JwxtExamsScreen(
         state = try {
             DataState.Ready(client?.fetchExams() ?: throw JwxtException("数据来源不可用"))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed("登录状态已失效，请重新登录")
+            DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
-            DataState.Failed(jwxtDataMessage(e, "读取考试安排失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "考试安排没加载出来"))
         } catch (e: Exception) {
-            DataState.Failed(jwxtDataMessage(e, "读取考试安排失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "考试安排没加载出来"))
         } finally {
             refreshing = false
         }
@@ -735,11 +738,11 @@ fun JwxtSelectionScreen(
         chosenState = try {
             DataState.Ready(c.fetchChosen())
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed("登录状态已失效，请重新登录")
+            DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
-            DataState.Failed(jwxtDataMessage(e, "读取已选课程失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "已选课程没加载出来"))
         } catch (e: Exception) {
-            DataState.Failed(jwxtDataMessage(e, "读取已选课程失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "已选课程没加载出来"))
         }
     }
 
@@ -750,11 +753,11 @@ fun JwxtSelectionScreen(
         searchState = try {
             DataState.Ready(c.queryCourses(keyword.trim()))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed("登录状态已失效，请重新登录")
+            DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
-            DataState.Failed(jwxtDataMessage(e, "查询课程失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "课程没查出来"))
         } catch (e: Exception) {
-            DataState.Failed(jwxtDataMessage(e, "查询课程失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "课程没查出来"))
         } finally {
             refreshing = false
         }
@@ -763,7 +766,7 @@ fun JwxtSelectionScreen(
     LaunchedEffect(access, cookie, attempt) {
         if (client == null) {
             val message = DataState.Failed(
-                if (usingGrab) "尚未登录抢课助手" else "尚未登录教务系统",
+                if (usingGrab) "还没登录抢课助手" else "还没登录教务系统",
             )
             searchState = message
             chosenState = message
@@ -786,7 +789,7 @@ fun JwxtSelectionScreen(
         runCatching { c.classes(course) }
             .onSuccess { classesByCourse[course.kchId] = it }
             .onFailure {
-                scope.launch { snackbar.showSnackbar(jwxtDataMessage(it, "读取教学班失败，请稍后重试")) }
+                scope.launch { snackbar.showSnackbar(jwxtDataMessage(it, "教学班没加载出来")) }
             }
         loadingClasses.remove(course.kchId)
     }
@@ -902,7 +905,7 @@ fun JwxtSelectionScreen(
                         working = true
                         scope.launch {
                             val message = runCatching { c.createTask(course, klass) }
-                                .fold({ it.message }, { jwxtDataMessage(it, "创建抢课任务失败，请稍后重试") })
+                                .fold({ it.message }, { jwxtDataMessage(it, "抢课任务没创建成功") })
                             snackbar.showSnackbar(message)
                             working = false
                         }
@@ -1265,18 +1268,18 @@ fun JwxtTasksScreen(
 
     suspend fun load() {
         val c = client ?: run {
-            state = DataState.Failed("尚未登录抢课助手")
+            state = DataState.Failed("还没登录抢课助手")
             return
         }
         refreshing = true
         state = try {
             DataState.Ready(c.fetchTasks())
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed("登录状态已失效，请重新登录")
+            DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
-            DataState.Failed(jwxtDataMessage(e, "读取抢课任务失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "抢课任务没加载出来"))
         } catch (e: Exception) {
-            DataState.Failed(jwxtDataMessage(e, "读取抢课任务失败，请稍后重试"))
+            DataState.Failed(jwxtDataMessage(e, "抢课任务没加载出来"))
         } finally {
             refreshing = false
         }
@@ -1306,14 +1309,14 @@ fun JwxtTasksScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = "抢课任务是抢课助手提供的功能",
+                            text = "抢课任务要用抢课助手",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "当前数据来源是官方教务系统。到「我的 → 教务系统 → 数据来源」切到抢课助手后，" +
-                                "在选课页给已满的教学班创建抢课任务。",
+                            text = "先到「我的 → 教务系统」把数据来源切到抢课助手，" +
+                                "再回选课页给满员的教学班创建任务。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1322,7 +1325,7 @@ fun JwxtTasksScreen(
 
                 client == null -> LoginRequired(
                     args = args,
-                    reason = "尚未登录抢课助手",
+                    reason = "还没登录抢课助手",
                     onLogin = { },
                     loginLabel = "登录抢课助手",
                     extra = grabLoginContent,
@@ -1345,7 +1348,7 @@ fun JwxtTasksScreen(
                             cancelingId = task.id
                             scope.launch {
                                 val message = runCatching { c.cancelTask(task.id) }
-                                    .fold({ it.message }, { jwxtDataMessage(it, "取消任务失败，请稍后重试") })
+                                    .fold({ it.message }, { jwxtDataMessage(it, "任务没取消成功") })
                                 snackbar.showSnackbar(message)
                                 cancelingId = null
                                 load()
@@ -1376,7 +1379,7 @@ private val TASK_FILTERS = listOf(
     "pending" to "排队中",
     "running" to "抢课中",
     "success" to "已成功",
-    "failed" to "失败",
+    "failed" to "已失败",
     "cancelled" to "已取消",
 )
 
@@ -1425,7 +1428,7 @@ private fun TaskList(
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(TASK_FILTERS.size) { index ->
@@ -1486,7 +1489,17 @@ private fun TaskCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(
+            modifier = Modifier
+                // 状态色做一条竖边，列表扫起来不用先去读右上角的字。
+                .drawBehind {
+                    drawRect(
+                        color = statusColor,
+                        size = Size(5.dp.toPx(), size.height),
+                    )
+                }
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = task.courseName.ifBlank { "未命名课程" },
@@ -1506,7 +1519,10 @@ private fun TaskCard(
             Spacer(Modifier.height(4.dp))
             val detail = listOf(
                 task.teacher.takeIf { it.isNotBlank() && it != "--" },
-                task.classInfo.takeIf { it.isNotBlank() },
+                task.classInfo.takeIf { it.isNotBlank() }?.let { info ->
+                    // 后端把「已选人数/容量」放在 class_info 里，例如 33/33。
+                    if (info.contains("/")) "已选 $info" else info
+                },
                 task.credit.takeIf { it.isNotBlank() }?.let { "$it 学分" },
             ).filterNotNull().joinToString(" · ")
             if (detail.isNotBlank()) {
@@ -1519,15 +1535,15 @@ private fun TaskCard(
                 )
             }
             val meta = buildString {
-                val created = task.createdAt.replace('T', ' ').take(16)
-                if (created.isNotBlank()) append("创建于 ").append(created)
+                val created = formatDateTime(task.createdAt)
+                if (created.isNotBlank()) append(created).append(" 创建")
                 if (task.retryCount > 0) {
                     if (isNotEmpty()) append(" · ")
                     append("已尝试 ").append(task.retryCount).append(" 次")
                 }
                 if (task.taskType == "scheduled" && task.scheduledTime.isNotBlank()) {
                     if (isNotEmpty()) append(" · ")
-                    append("定时 ").append(task.scheduledTime.replace('T', ' ').take(16))
+                    append("定时 ").append(formatDateTime(task.scheduledTime))
                 }
             }
             if (meta.isNotBlank()) {
@@ -1535,13 +1551,17 @@ private fun TaskCard(
                 Text(
                     text = meta,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (task.resultMessage.isNotBlank()) {
+            // 「已取消」旁边再写一句「任务被取消」是重复，结果已经由状态表达了。
+            val resultText = task.resultMessage.trim()
+            val redundantResult = (task.status == "cancelled" && resultText.contains("取消")) ||
+                (task.status == "success" && resultText.contains("成功"))
+            if (resultText.isNotBlank() && !redundantResult) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = task.resultMessage,
+                    text = resultText,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (task.status == "failed") {
                         MaterialTheme.colorScheme.error
@@ -1552,11 +1572,20 @@ private fun TaskCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onOpenDetail) { Text("查看日志") }
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(
+                    onClick = onOpenDetail,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) { Text("详情") }
                 if (task.active) {
-                    TextButton(onClick = onCancel, enabled = !canceling) {
+                    TextButton(
+                        onClick = onCancel,
+                        enabled = !canceling,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
                         if (canceling) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
@@ -1564,7 +1593,7 @@ private fun TaskCard(
                             )
                             Spacer(Modifier.width(6.dp))
                         }
-                        Text(if (canceling) "正在取消…" else "取消任务")
+                        Text("取消任务")
                     }
                 }
             }
@@ -1576,7 +1605,7 @@ private fun taskStatusLabel(status: String): String = when (status) {
     "pending" -> "排队中"
     "running" -> "抢课中"
     "success" -> "已成功"
-    "failed" -> "失败"
+    "failed" -> "已失败"
     "cancelled" -> "已取消"
     "expired" -> "已过期"
     else -> "状态未知"
@@ -1661,21 +1690,26 @@ private fun TaskDetailDialog(
                 if (task.teacher.isNotBlank() && task.teacher != "--") {
                     DetailLine("教师", task.teacher)
                 }
-                if (task.classInfo.isNotBlank()) DetailLine("教学班", task.classInfo)
+                if (task.classInfo.isNotBlank()) {
+                    DetailLine(
+                        if (task.classInfo.contains("/")) "已选" else "教学班",
+                        task.classInfo,
+                    )
+                }
                 if (task.credit.isNotBlank()) DetailLine("学分", task.credit)
                 DetailLine(
-                    "重试",
+                    "已尝试",
                     if (task.maxRetries > 0) {
                         "${task.retryCount} / ${task.maxRetries}"
                     } else {
                         "${task.retryCount} 次"
                     },
                 )
-                if (task.createdAt.isNotBlank()) DetailLine("创建", taskTime(task.createdAt))
-                if (task.startedAt.isNotBlank()) DetailLine("开始", taskTime(task.startedAt))
-                if (task.completedAt.isNotBlank()) DetailLine("结束", taskTime(task.completedAt))
+                if (task.createdAt.isNotBlank()) DetailLine("创建", formatDateTime(task.createdAt))
+                if (task.startedAt.isNotBlank()) DetailLine("开始", formatDateTime(task.startedAt))
+                if (task.completedAt.isNotBlank()) DetailLine("结束", formatDateTime(task.completedAt))
                 if (task.scheduledTime.isNotBlank()) {
-                    DetailLine("定时", taskTime(task.scheduledTime))
+                    DetailLine("定时", formatDateTime(task.scheduledTime))
                 }
                 if (task.resultMessage.isNotBlank()) DetailLine("结果", task.resultMessage)
 

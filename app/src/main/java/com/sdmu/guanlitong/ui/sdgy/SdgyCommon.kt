@@ -164,21 +164,21 @@ fun Context.hasPermission(permission: String): Boolean =
 fun Throwable.sdgyMessage(): String = when {
     this is CancellationException -> ""
     this is SdgyPasswordResetException -> "请先在官方山管 App 重置密码"
-    this is SdgyException && sessionLost -> "山管 App 登录已失效，请重新登录"
-    this is SdgyException && code == "not_login" -> "请先到「我的 → 山管 App」登录"
+    this is SdgyException && sessionLost -> "山管 App 登录已过期"
+    this is SdgyException && code == "not_login" -> "还没登录山管 App"
     this is SdgyException && (
         message.orEmpty().contains("HTTP") ||
             message.orEmpty().contains("握手") ||
             message.orEmpty().contains("无法识别") ||
             message.orEmpty().contains("缺少会话")
-        ) -> "服务器暂时无法连接，请稍后重试"
-    this is SdgyException -> message?.takeIf { it.isNotBlank() } ?: "操作失败，请稍后重试"
-    this is UnknownHostException || this is ConnectException -> "网络连接失败，请检查网络后重试"
-    this is SocketTimeoutException -> "连接超时，请检查网络后重试"
-    this is SSLException -> "安全连接失败，请检查网络或稍后重试"
-    this is JSONException -> "数据暂时无法读取，请稍后重试"
-    this is IOException -> "网络连接失败，请检查网络后重试"
-    else -> "操作失败，请稍后重试"
+        ) -> "暂时连不上山管服务器"
+    this is SdgyException -> message?.takeIf { it.isNotBlank() } ?: "操作没成功"
+    this is UnknownHostException || this is ConnectException -> "网络没连上"
+    this is SocketTimeoutException -> "连接超时了"
+    this is SSLException -> "安全连接失败"
+    this is JSONException -> "数据没读出来"
+    this is IOException -> "网络没连上"
+    else -> "操作没成功"
 }
 
 @Composable

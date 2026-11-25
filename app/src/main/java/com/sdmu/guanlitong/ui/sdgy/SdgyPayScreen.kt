@@ -97,7 +97,7 @@ fun SdgyPayScreen(
 
     suspend fun refreshCode() {
         if (studentId.isBlank()) {
-            ui = ui.copy(firstLoad = false, error = "尚未登录山管 App，无法获取一卡通信息。")
+            ui = ui.copy(firstLoad = false, error = "还没登录山管 App，拿不到一卡通信息。")
             return
         }
         // 后续刷新保留旧二维码和余额，不清空已显示页面。

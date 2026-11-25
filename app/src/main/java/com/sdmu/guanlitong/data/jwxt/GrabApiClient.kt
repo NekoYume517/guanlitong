@@ -261,7 +261,7 @@ class GrabApiClient(
 
     private fun requireSession() {
         if (baseUrl.isBlank()) throw JwxtException("尚未配置抢课助手地址")
-        if (cookie.isBlank()) throw JwxtSessionExpiredException("尚未登录抢课助手，请先在「我的 → 抢课助手」登录")
+        if (cookie.isBlank()) throw JwxtSessionExpiredException("还没登录抢课助手，先到「我的 → 教务系统」登录")
     }
 
     private fun request(path: String, body: JSONObject? = null): JSONObject {

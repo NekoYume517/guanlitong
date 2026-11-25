@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -111,6 +112,9 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.Timetable
 import com.sdmu.guanlitong.ui.components.ServiceBadge
 import com.sdmu.guanlitong.ui.components.StatusDot
+import com.sdmu.guanlitong.ui.format.formatMonthDayTime
+import com.sdmu.guanlitong.ui.format.semesterText
+import com.sdmu.guanlitong.ui.format.termText
 import com.sdmu.guanlitong.widget.UpcomingClass
 import com.sdmu.guanlitong.widget.countdownLabel
 import com.sdmu.guanlitong.widget.dayPrefix
@@ -121,7 +125,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -131,7 +134,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 /**
@@ -1156,7 +1158,7 @@ private fun OverviewHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onAddWidget) {
+        FilledTonalIconButton(onClick = onAddWidget) {
             Icon(Icons.Outlined.Tune, contentDescription = "添加小组件")
         }
     }
@@ -1178,13 +1180,7 @@ private fun EmptyWidgets(onAddWidget: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "添加要显示的内容",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Button(onClick = onAddWidget) { Text("添加小组件") }
         }
     }
@@ -2259,29 +2255,17 @@ private fun todayCourses(timetable: Timetable, today: LocalDate): List<Course> =
         .filter { it.dayOfWeek == today.dayOfWeek.value }
         .sortedBy { it.startPeriod }
 
-private fun semesterLabel(timetable: Timetable): String {
-    val year = timetable.xnm.toIntOrNull()
-        ?.let { "$it–${it + 1} 学年" }
-        ?: "当前学年"
-    val term = termLabel(timetable)
-    return if (term.isBlank()) year else "$year · $term"
-}
+private fun semesterLabel(timetable: Timetable): String =
+    semesterText(timetable.xnm, timetable.xqm).ifBlank { "当前学年" }
 
-private fun termLabel(timetable: Timetable): String =
-    when (timetable.xqm) {
-        "3" -> "第一学期"
-        "12" -> "第二学期"
-        "16" -> "第三学期"
-        else -> ""
-    }
+private fun termLabel(timetable: Timetable): String = termText(timetable.xqm)
 
 @Composable
 internal fun accentOf(feature: ServiceFeature): Color =
     ServiceCatalog.byId(feature.targetServiceId)?.accent
         ?: MaterialTheme.colorScheme.primary
 
-private fun formatUpdatedAt(timestamp: Long): String =
-    SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+private fun formatUpdatedAt(timestamp: Long): String = formatMonthDayTime(timestamp)
 
 private fun greeting(): String =
     when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {

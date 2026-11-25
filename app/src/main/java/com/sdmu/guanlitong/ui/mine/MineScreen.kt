@@ -166,12 +166,11 @@ fun MineScreen(
             text = {
                 Text(
                     "查课表、成绩、考试和选课，管理教务与山管 App 账号。\n\n" +
-                        "账号由你在「我的」里自行管理，App 默认不强制登录。\n\n" +
-                        "本应用为非官方工具，与山东管理学院官方无关。",
+                        "本应用由学生开发，与山东管理学院官方无关。",
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
+                TextButton(onClick = { showAboutDialog = false }) { Text("关闭") }
             },
         )
     }
@@ -212,7 +211,7 @@ private fun ProfileCard(loggedInCount: Int, totalCount: Int) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "已登录 $loggedInCount / $totalCount 个服务",
+                    text = "已登录 $loggedInCount/$totalCount 个服务",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

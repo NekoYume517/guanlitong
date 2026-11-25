@@ -106,7 +106,7 @@ fun SdgyWebScreen(
                 else -> ""
             }
             if (target.isBlank()) {
-                loadingError = "这个功能暂时不可用"
+                loadingError = "这个功能暂时用不了"
             } else {
                 auth = credentials
                 resolvedUrl = target
@@ -147,7 +147,7 @@ fun SdgyWebScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Outlined.OpenInNew,
-                            contentDescription = "在浏览器中打开",
+                            contentDescription = "在浏览器打开",
                         )
                     }
                 },
@@ -296,7 +296,7 @@ private fun SdgyWebView(
                         ) {
                             super.onReceivedError(view, request, error)
                             if (request?.isForMainFrame == true) {
-                                pageError = "页面暂时打不开，请稍后重试"
+                                pageError = "页面暂时打不开"
                             }
                         }
 
@@ -400,7 +400,7 @@ private fun SdgyWebView(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    "页面暂时打不开，请稍后重试",
+                    "页面暂时打不开",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

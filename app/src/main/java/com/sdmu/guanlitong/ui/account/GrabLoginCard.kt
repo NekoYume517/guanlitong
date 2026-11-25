@@ -131,7 +131,7 @@ fun GrabLoginCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "用它自己的账号登录，课表、成绩、考试和选课都会从 jwxt.bansonic.top 取数。",
+                    text = "登录后，课表、成绩、考试和选课都从抢课助手取。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -174,7 +174,7 @@ fun GrabLoginCard(
                 Switch(checked = rememberPassword, onCheckedChange = { rememberPassword = it })
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "记住密码（使用系统密钥库加密）",
+                    text = "记住密码",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -221,7 +221,7 @@ fun GrabLoginCard(
                         }
 
                         grabUrl.isBlank() -> {
-                            message = "还没有配置抢课助手地址"
+                            message = "还没配置抢课助手地址"
                             messageIsError = true
                         }
 

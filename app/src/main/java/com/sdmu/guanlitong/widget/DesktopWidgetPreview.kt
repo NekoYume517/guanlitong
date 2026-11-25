@@ -23,9 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.WidgetType
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.sdmu.guanlitong.ui.format.formatMonthDayTime
+import com.sdmu.guanlitong.ui.format.semesterText
 
 /** 编辑页实时预览：读取同一份桌面数据，不提交也能看到切换后的结果。 */
 @Composable
@@ -67,7 +66,7 @@ fun DesktopWidgetPreview(
             Spacer(Modifier.height(if (size == DesktopSize.Small) 5.dp else 9.dp))
             val nextClassUpdate = if (type == WidgetType.NextClass) {
                 state.nextClass.savedAt.takeIf { it > 0 }?.let {
-                    " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
+                    " · ${formatMonthDayTime(it)} 更新"
                 }.orEmpty()
             } else ""
             Text(
@@ -76,7 +75,7 @@ fun DesktopWidgetPreview(
                     type == WidgetType.NextClass && state.nextClass.sessionLost -> "未登录，显示上次课表$nextClassUpdate"
                     type == WidgetType.NextClass && nextClassUpdate.isNotEmpty() -> nextClassUpdate.removePrefix(" · ")
                     type == WidgetType.NextClass -> "显示上次课表"
-                    else -> "桌面卡片 · 长按编辑"
+                    else -> "小组件 · 长按编辑"
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -192,7 +191,7 @@ private fun GenericPreview(state: DesktopState) {
             else {
                 Text("第 ${state.currentWeek} 周", style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("${state.cached.timetable.xnm} 学年 · 第 ${state.cached.timetable.xqm} 学期")
+                Text(semesterText(state.cached.timetable.xnm, state.cached.timetable.xqm))
                 Text("本周共 ${state.weekCourses} 门课", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -252,23 +253,15 @@ fun SdgyAppsContent(
                     SearchField(query = query, onQueryChange = { query = it })
                 }
             }
-            if (query.isBlank()) {
+            // 分类胶囊模式下，刷新按钮挂到第一个分组标题右边，避免单独占一行留下空白。
+            if (query.isBlank() && !flowChips) {
                 item {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(
-                            onClick = { refreshToken++ },
-                            enabled = loggedIn && !refreshing,
-                        ) {
-                            Icon(
-                                Icons.Outlined.Refresh,
-                                contentDescription = "刷新功能列表",
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                        RefreshButton(refreshing, loggedIn) { refreshToken++ }
                     }
                 }
             }
@@ -312,7 +305,11 @@ fun SdgyAppsContent(
                 // 官方分类标题 + 该分类的胶囊按钮，不再做第三级 tab。
                 items(shownGroups, key = { it.name }) { group ->
                     Column {
-                        SectionTitle(group.name)
+                        SectionTitle(group.name) {
+                            if (group.name == shownGroups.first().name) {
+                                RefreshButton(refreshing, loggedIn) { refreshToken++ }
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
                         AppChipRows(group.apps, onOpen = ::openEntry)
                     }
@@ -364,7 +361,7 @@ private fun AccountCard(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (loggedIn) name.ifBlank { "已登录" } else "尚未登录山管 App",
+                    if (loggedIn) name.ifBlank { "已登录" } else "还没登录山管 App",
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -434,12 +431,22 @@ private fun ErrorCard(message: String, source: String, onRetry: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "功能列表刷新失败：$message",
+                    "功能列表没刷新出来",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
+                val detail = message.takeUnless {
+                    it.isBlank() || it.contains("HTTP") || it.contains("Exception")
+                }
+                if (detail != null) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                    )
+                }
                 Text(
-                    "当前显示$source。",
+                    "现在显示的是$source。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                 )
@@ -450,14 +457,49 @@ private fun ErrorCard(message: String, source: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurface,
+private fun SectionTitle(
+    text: String,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
         modifier = Modifier.fillMaxWidth(),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun RefreshButton(
+    refreshing: Boolean,
+    loggedIn: Boolean,
+    onRefresh: () -> Unit,
+) {
+    IconButton(
+        onClick = onRefresh,
+        enabled = loggedIn && !refreshing,
+        modifier = Modifier.size(36.dp),
+    ) {
+        if (refreshing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Refresh,
+                contentDescription = "刷新功能列表",
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }
 
 @Composable

@@ -38,9 +38,8 @@ import com.sdmu.guanlitong.MainActivity
 import com.sdmu.guanlitong.data.WidgetType
 import com.sdmu.guanlitong.data.jwxt.CachedTimetable
 import com.sdmu.guanlitong.data.ServiceCatalog
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.sdmu.guanlitong.ui.format.formatMonthDayTime
+import com.sdmu.guanlitong.ui.format.semesterText
 
 abstract class DesktopWidgetReceiver : GlanceAppWidgetReceiver() {
     abstract val size: DesktopSize
@@ -186,7 +185,7 @@ private fun NextClassDesktop(state: DesktopState) {
         }
     }
     val updateLabel = snapshot.savedAt.takeIf { it > 0 }?.let {
-        " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
+        " · ${formatMonthDayTime(it)} 更新"
     }.orEmpty()
     val statusLabel = when {
         !snapshot.hasTimetable -> ""
@@ -240,7 +239,7 @@ private fun GenericDesktop(state: DesktopState) {
             if (timetable == null) DesktopMessage("打开一次课表后显示")
             else {
                 Text("第 ${state.currentWeek} 周", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold))
-                Text("${timetable.xnm} 学年 · 第 ${timetable.xqm} 学期", style = bodyStyle())
+                Text(semesterText(timetable.xnm, timetable.xqm), style = bodyStyle())
                 Text("本周共 ${state.weekCourses} 门课", style = captionStyle())
             }
         }

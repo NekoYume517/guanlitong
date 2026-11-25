@@ -122,7 +122,7 @@ internal fun SdgyLoginSection(
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "正在检查山管会话…",
+                        text = "正在检查登录状态…",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -130,7 +130,7 @@ internal fun SdgyLoginSection(
 
                 statusError != null -> SdgyRetainedCard(statusError!!)
 
-                !sessionReady -> SdgyRetainedCard("会话暂时不可用，下一次联网时会自动恢复。")
+                !sessionReady -> SdgyRetainedCard("暂时连不上山管，联网后会自动恢复。")
             }
         }
 
@@ -180,7 +180,7 @@ internal fun SdgyLoginSection(
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                text = "记住密码（被顶号后自动重登）",
+                text = "记住密码，被顶号后自动重登",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -224,12 +224,11 @@ internal fun SdgyLoginSection(
                             )
                             sessionReady = saved
                             statusError = null
-                            message = if (saved) "登录成功" else "已登录，但登录态保存失败，重启 App 后需要重新登录"
+                            message = if (saved) "登录成功" else "已登录，但没能保存，重启 App 后要重新登录"
                             messageIsError = !saved
-                            if (!saved) toast("登录成功，但登录态保存失败")
                         } catch (e: SdgyPasswordResetException) {
                             resetUrl = e.resetUrl
-                            message = "该账号需要先在官方山管 App 重置密码"
+                            message = "需要先在官方山管 App 重置密码"
                             messageIsError = true
                         } catch (e: SdgyException) {
                             message = e.sdgyMessage()
@@ -240,14 +239,14 @@ internal fun SdgyLoginSection(
                             if (rememberPassword) {
                                 // 服务器半夜关机时也保留登录状态，等它恢复后自动重登。
                                 store.markLoggedIn("sdgy", user, password = password)
-                                val text = "暂时连不上山管服务器（夜间可能关机），登录状态已保留，恢复后会自动重试"
+                                val text = "现在连不上山管服务器（夜间可能关机），登录没有退出，恢复后会自动重试"
                                 sessionStore.setError(text)
                                 statusError = text
                                 sessionReady = false
                                 message = text
                                 messageIsError = true
                             } else {
-                                message = "无法连接山管服务器，请联网后重试"
+                                message = "连不上山管服务器，联网后再试"
                                 messageIsError = true
                             }
                         } catch (e: Exception) {
@@ -290,7 +289,6 @@ internal fun SdgyLoginSection(
                             statusError = null
                             message = "已退出登录"
                             messageIsError = false
-                            toast("已退出登录")
                         } finally {
                             loading = false
                         }
@@ -302,7 +300,7 @@ internal fun SdgyLoginSection(
         }
 
         Text(
-            text = "账号密码只发往学校移动校园服务器，密码用系统密钥库加密保存。",
+            text = "账号密码只发给学校，密码加密保存在本机。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -334,7 +332,7 @@ internal fun SdgyLoginSection(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { resetUrl = null }) { Text("知道了") }
+                TextButton(onClick = { resetUrl = null }) { Text("关闭") }
             },
         )
     }

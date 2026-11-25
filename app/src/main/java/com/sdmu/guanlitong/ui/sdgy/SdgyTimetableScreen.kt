@@ -587,7 +587,7 @@ private fun NameListDialog(
                 }
                 error != null -> Column {
                     Text(
-                        "名单加载失败",
+                        "名单没加载出来",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -133,7 +133,7 @@ fun JwxtLoginPanel(
                 hint = "识别结果「$recognized」不完整，请手动输入验证码"
             }
         } catch (e: Exception) {
-            message = "获取验证码失败，请检查网络后重试"
+            message = "验证码没加载出来，检查一下网络"
             isError = true
         } finally {
             captchaLoading = false
@@ -171,7 +171,7 @@ fun JwxtLoginPanel(
                     captchaNonce++
                 }
             } catch (e: Exception) {
-                message = "登录失败，请稍后重试"
+                message = "登录没成功，再试一次"
                 isError = true
             } finally {
                 loggingIn = false
@@ -286,7 +286,7 @@ fun JwxtLoginPanel(
             Switch(checked = remember, onCheckedChange = { remember = it })
             Spacer(Modifier.width(10.dp))
             Text(
-                text = "记住密码（使用系统密钥库加密）",
+                text = "记住密码",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

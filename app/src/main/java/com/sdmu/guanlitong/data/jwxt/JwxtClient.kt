@@ -36,7 +36,7 @@ class JwxtClient(
 
     suspend fun fetch(): Timetable = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) throw JwxtException("尚未配置教务系统地址")
-        if (cookie.isBlank()) throw JwxtSessionExpiredException("尚未登录教务系统，请先在网页中登录")
+        if (cookie.isBlank()) throw JwxtSessionExpiredException("还没登录教务系统，先在网页里登录")
 
         val indexHtml = request(indexUrl, "GET", null)
         if (!indexHtml.contains("xskbcxZccx", ignoreCase = true) &&

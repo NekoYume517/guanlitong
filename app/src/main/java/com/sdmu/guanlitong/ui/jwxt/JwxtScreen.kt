@@ -1,6 +1,7 @@
 package com.sdmu.guanlitong.ui.jwxt
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -92,11 +93,10 @@ import com.sdmu.guanlitong.data.sdgy.SdgyClassmate
 import com.sdmu.guanlitong.data.sdgy.SdgyCourseSupplement
 import com.sdmu.guanlitong.data.sdgy.SdgyRepository
 import com.sdmu.guanlitong.data.sdgy.SdgyTimetableSource
-import java.text.SimpleDateFormat
+import com.sdmu.guanlitong.ui.format.formatMonthDayTime
+import com.sdmu.guanlitong.ui.format.semesterText
 import java.time.LocalDate
 import java.time.ZoneId
-import java.util.Date
-import java.util.Locale
 
 private sealed interface TimetableState {
     data object Loading : TimetableState
@@ -676,10 +676,8 @@ private fun CacheNotice(
     }
 }
 
-private fun formatUpdatedAt(timestamp: Long): String {
-    if (timestamp <= 0L) return "时间未知"
-    return SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(timestamp))
-}
+private fun formatUpdatedAt(timestamp: Long): String =
+    if (timestamp <= 0L) "时间未知" else formatMonthDayTime(timestamp)
 
 @Composable
 private fun WeekSelector(
@@ -740,7 +738,8 @@ private fun TimetableGrid(
         ).coerceAtMost(14)
     }
     val cellHeight = if (periodCount > 11) 48.dp else 52.dp
-    val timeWidth = 42.dp
+    // 手机上一列只有 40dp 左右，时间列和内外边距都要让给课程名。
+    val timeWidth = 36.dp
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
 
     Surface(
@@ -749,7 +748,7 @@ private fun TimetableGrid(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Row(modifier = Modifier.padding(horizontal = 6.dp)) {
+            Row(modifier = Modifier.padding(horizontal = 4.dp)) {
                 Spacer(Modifier.width(timeWidth))
                 for (day in 1..7) {
                     DayHeader(
@@ -763,14 +762,14 @@ private fun TimetableGrid(
             }
 
             HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                 color = gridColor,
             )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp)
+                    .padding(horizontal = 4.dp)
                     .height(cellHeight * periodCount.toFloat()),
             ) {
                 TimeColumn(
@@ -930,24 +929,29 @@ private fun DayColumn(
                     )
                     .width(cardWidth)
                     .height(cellHeight * span.toFloat())
-                    .padding(horizontal = 1.dp, vertical = 1.5.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(accent.copy(alpha = if (dark) 0.34f else 0.15f))
+                    .padding(horizontal = 0.5.dp, vertical = 1.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(accent.copy(alpha = if (dark) 0.36f else 0.18f))
+                    .border(
+                        width = 1.dp,
+                        color = accent.copy(alpha = if (dark) 0.35f else 0.22f),
+                        shape = MaterialTheme.shapes.small,
+                    )
                     .clickable { onCourseClick(course) },
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = if (compact) 3.dp else 6.dp, vertical = 3.dp),
+                        .padding(horizontal = if (compact) 2.dp else 3.dp, vertical = 3.dp),
                 ) {
                     Text(
                         text = course.name,
-                        fontSize = if (compact) 7.sp else 8.sp,
-                        lineHeight = if (compact) 8.5.sp else 10.sp,
+                        fontSize = if (compact) 7.5.sp else 9.5.sp,
+                        lineHeight = if (compact) 9.sp else 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = when {
-                            compact -> 5
+                            compact -> 4
                             span <= 1 -> 2
                             else -> 3
                         },
@@ -959,24 +963,24 @@ private fun DayColumn(
                             fontSize = 7.sp,
                             lineHeight = 8.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 4,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                     if (!compact && course.room.isNotBlank()) {
                         Text(
                             text = course.room,
-                            fontSize = 8.sp,
+                            fontSize = 8.5.sp,
                             lineHeight = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 4,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                     if (!compact && span >= 3 && course.teacher.isNotBlank()) {
                         Text(
                             text = course.teacher,
-                            fontSize = 8.sp,
+                            fontSize = 8.5.sp,
                             lineHeight = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -1267,32 +1271,20 @@ private fun placeDay(courses: List<Course>): List<PlacedCourse> {
     return result
 }
 
-private fun semesterLabel(xnm: String, xqm: String): String {
-    if (xnm.isBlank() && xqm.isBlank()) return "本学期"
-    val start = xnm.toIntOrNull()
-    val year = if (start != null) "$start–${start + 1} 学年" else xnm
-    val term = when (xqm) {
-        "3" -> "第 1 学期"
-        "12" -> "第 2 学期"
-        "" -> ""
-        else -> "学期 $xqm"
-    }
-    return listOf(year, term)
-        .filter { it.isNotBlank() }
-        .joinToString(" · ")
-}
+private fun semesterLabel(xnm: String, xqm: String): String =
+    semesterText(xnm, xqm).ifBlank { "本学期" }
 
 private val WEEKDAYS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 private fun jwxtFailureMessage(error: Throwable): String = when {
-    error is JwxtSessionExpiredException -> "登录已失效，重新登录后就能看课表"
-    error is UnknownHostException || error is ConnectException -> "网络连接失败，请检查网络"
-    error is SocketTimeoutException -> "连接超时，请检查网络"
-    error is IOException -> "网络连接失败，请检查网络"
+    error is JwxtSessionExpiredException -> "登录已过期，重新登录后就能看"
+    error is UnknownHostException || error is ConnectException -> "网络没连上"
+    error is SocketTimeoutException -> "连接超时了"
+    error is IOException -> "网络没连上"
     error is JwxtException -> error.message
         ?.takeUnless { it.isBlank() || it.contains("HTTP") }
-        ?: "请稍后再试"
-    else -> "请稍后再试"
+        ?: "暂时取不到数据"
+    else -> "暂时取不到数据"
 }
 
 private val COURSE_COLORS = listOf(

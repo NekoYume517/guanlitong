@@ -72,11 +72,9 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.ui.components.ServiceBadge
 import com.sdmu.guanlitong.ui.components.StatusText
+import com.sdmu.guanlitong.ui.format.formatMonthDayTime
 import com.sdmu.guanlitong.ui.jwxt.JwxtLoginPanel
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,22 +152,13 @@ fun AccountScreen(
 
             if (serviceUrl.isBlank()) {
                 WarningCard(
-                    text = "这个服务暂时不可用。",
+                    text = "这个服务暂时用不了。",
                 )
             }
 
             if (statusAccount.loggedIn) {
-                InfoRow(label = "账号", value = statusAccount.displayName.ifBlank { "—" })
+                // 账号名和登录方式上面的卡片已经写了，这里只补一个最近登录时间。
                 InfoRow(label = "最近登录", value = formatTime(statusAccount.lastLoginAt))
-                InfoRow(
-                    label = "登录方式",
-                    value = when {
-                        jwxtSource == JwxtSource.Grab && service.id == "jwxt" ->
-                            "账号密码（抢课助手）"
-                        service.loginMode == LoginMode.CREDENTIAL -> "账号密码"
-                        else -> "网页登录"
-                    },
-                )
                 HorizontalDivider()
             }
 
@@ -357,12 +346,6 @@ private fun JwxtSourceSection(
                 onSignedOut = onGrabLoginChanged,
             )
         }
-
-        Text(
-            text = "切换后，课表、成绩等数据会从所选来源读取。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -445,7 +428,7 @@ private fun CredentialSection(
         Switch(checked = rememberPassword, onCheckedChange = onRememberPasswordChange)
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "记住密码（使用系统密钥库加密）",
+            text = "记住密码",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -494,7 +477,7 @@ private fun CredentialSection(
     }
 
     Text(
-        text = "登录请求直接发往你的抢课助手后端，密码不会上传到其他服务器。",
+        text = "账号密码只用来登录抢课助手。",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -513,11 +496,11 @@ private fun WebSection(
     Text(
         text = when {
             service.id != "jwxt" ->
-                "该服务使用学校统一身份认证，请在内嵌网页里完成登录。"
+                "用学校统一身份认证登录。"
             nativeLoginAvailable ->
-                "可以用学号密码直接登录，验证码会自动识别；也可以打开网页登录。"
+                "用学号密码登录，验证码会自动识别。"
             else ->
-                "当前数据来源是抢课助手。官方教务网页仍可单独打开；抢课助手账号在上方「数据来源 → 抢课助手」里直接登录。"
+                "想直接用学校系统，把上方的数据来源切到「官方教务系统」。"
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -550,7 +533,7 @@ private fun WebSection(
             modifier = Modifier.size(18.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(if (loggedIn) "打开网页" else "打开网页登录")
+        Text("打开网页")
     }
 
     if (loggedIn) {
@@ -617,6 +600,5 @@ private fun InfoRow(label: String, value: String) {
 
 private fun formatTime(timestamp: Long): String {
     if (timestamp <= 0L) return "—"
-    val formatter = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
-    return formatter.format(Date(timestamp))
+    return formatMonthDayTime(timestamp)
 }
