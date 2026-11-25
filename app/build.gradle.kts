@@ -99,6 +99,13 @@ dependencies {
     // 教务系统验证码识别：ML Kit 离线文字识别（Latin 模型，打包进 APK，不依赖 Google Play 服务）
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // 一卡通付款码的二维码生成，完全离线。
+// 一卡通付款码的二维码生成，完全离线。
     implementation("com.google.zxing:core:3.5.3")
+
+    // 口袋校园「扫一扫」的内嵌取景器，完全离线。
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    // PU 数据层单元测试：JVM 上没有可用的 org.json / JUnit，显式引入。
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
