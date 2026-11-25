@@ -160,11 +160,13 @@ fun PuLoginSection(
             value = schoolId,
             onValueChange = { schoolId = it.filter(Char::isDigit) },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("学校 go_id") },
+            label = { Text("学校 go_id（学校标识）") },
             singleLine = true,
             enabled = !loading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            supportingText = { Text("山东管理学院默认 $PU_DEFAULT_SCHOOL_ID，换校时改成目标学校的 go_id") },
+            supportingText = {
+                Text("默认已填山东管理学院的 go_id；更换学校时，请填写目标学校提供的 go_id，不是学校编号。")
+            },
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -208,7 +210,7 @@ fun PuLoginSection(
                 when {
                     user.isEmpty() -> showError("请输入学号或账号")
                     pw.isEmpty() -> showError("请输入密码")
-                    goId == null -> showError("学校 go_id 必须是正整数")
+                    goId == null -> showError("请填写有效的学校 go_id（正整数）")
                     else -> scope.launch {
                         loading = true
                         message = null
@@ -286,8 +288,7 @@ fun PuLoginSection(
         }
 
         Text(
-            "账号密码只发往口袋校园服务器（api.pocketuni.net）换取 token；" +
-                "token 用系统密钥库加密保存，界面不显示 token 原文。",
+            "账号密码仅用于登录口袋校园；登录信息加密保存在本机，不会在界面显示。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -314,15 +315,14 @@ private fun TokenNotice() {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    "token 授权，密码只用于换 token",
+                    "登录后即可使用口袋校园",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "口袋校园的登录接口返回 32 位 token，之后所有请求用它做 Bearer 鉴权；" +
-                        "不填「记住密码」时本应用不会保存密码。",
+                    "登录信息用于保持口袋校园登录状态；不勾选「记住密码」时，本应用不会保存密码。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
@@ -397,14 +397,14 @@ private fun StaleTokenCard() {
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(
-                    "登录状态已保留，但 token 不在本机",
+                    "账号已登录，需要重新验证",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    "重新输入密码登录一次即可恢复。",
+                    "账号信息已保留，重新输入密码登录即可恢复。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
