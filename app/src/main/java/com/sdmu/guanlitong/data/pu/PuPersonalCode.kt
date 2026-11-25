@@ -17,13 +17,13 @@ import javax.crypto.spec.SecretKeySpec
  *   这样 JVM 单元测试不需要 Robolectric 也能跑；
  * - `Base64.getEncoder()` 不折行，等价于上游的 `NO_WRAP`。
  */
-object PuPersonalCode {
+object PuPersonalCodec {
 
     const val DES_KEY = "TG123!@#"
 
     private const val PLAIN_PREFIX = "xyhui://user/"
 
-    /** 明文串；长度取决于 username，49~56 字节明文才恰好是 76 字符密文。 */
+    /** 明文串；长度取决于 username：明文 48~55 字节时密文恰好 76 字符。 */
     fun plain(uid: String, username: String, tsSeconds: Long): String =
         "$PLAIN_PREFIX$uid/$tsSeconds/$username"
 

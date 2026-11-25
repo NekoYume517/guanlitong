@@ -220,7 +220,7 @@ internal fun JSONObject.toFriend(): PuFriend = PuFriend(
 )
 
 /**
- * `/apis/relations/*/list` 的条目 → [PuActivity] 外壳。
+ * `/apis/relations/{type}/list` 的条目 → [PuActivity] 外壳。
  *
  * 冻结签名把 `friends()` 的返回类型定为 `PuPage`（元素只能是 [PuActivity]），
  * 所以这里把好友压成「id = 数字 uid 或 0，name = 昵称，raw = 好友 JSON」的外壳，

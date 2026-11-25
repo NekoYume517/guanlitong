@@ -19,7 +19,7 @@ class PuScanTest {
 
     @Test
     fun encrypted_user_code_is_user() {
-        val code = PuPersonalCode.encode("208791531159552", "test", 1700000000L)
+        val code = PuPersonalCodec.encode("208791531159552", "test", 1700000000L)
         assertTrue(PuScan.classify(code) is PuScanResult.User)
     }
 

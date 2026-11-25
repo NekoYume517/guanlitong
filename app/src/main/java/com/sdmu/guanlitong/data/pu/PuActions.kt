@@ -224,8 +224,8 @@ object PuActions {
     }
 
     /** 批量签到：`ids` 为空时自动取「未签到活动」；结果逐条汇总。 */
-    suspend fun autoSign(ids: Long[]?, address: String? = null): JSONObject {
-        val targets: List<Long> = if (!ids.isNullOrEmpty()) {
+    suspend fun autoSign(ids: LongArray?, address: String? = null): JSONObject {
+        val targets: List<Long> = if (ids != null && ids.isNotEmpty()) {
             ids.filter { it > 0L }
         } else {
             canSignList().map { it.id }.filter { it > 0L }
@@ -261,7 +261,7 @@ object PuActions {
      * 批量报名：先逐条取详情跑 `whyJoin`，已报名记 skip、其余记 fail；
      * 通过判定才真正 POST join。`join` 依赖 X-Sign，库不可用时整批拒绝（§6.5）。
      */
-    suspend fun autoJoin(ids: Long[]): JSONObject {
+    suspend fun autoJoin(ids: LongArray): JSONObject {
         ensureJoinSupported()
         if (ids.isEmpty()) throw PuException("缺少要报名的活动", 400)
         if (ids.size > BATCH_MAX) throw PuException("一次最多 $BATCH_MAX 个活动", 400)
@@ -330,7 +330,7 @@ object PuActions {
         val ts = serverSeconds(api)
         val refresh = qrRefresh(api)
         val code = try {
-            PuPersonalCode.encode(uid, username, ts)
+            PuPersonalCodec.encode(uid, username, ts)
         } catch (e: Throwable) {
             throw PuException("个人码加密失败: ${e.message ?: e.javaClass.simpleName}", 500)
         }
