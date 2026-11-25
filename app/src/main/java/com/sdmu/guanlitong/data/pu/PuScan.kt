@@ -32,14 +32,14 @@ object PuScan {
             return PuScanResult.Activity(mid = s, id = 0L, title = "", type = 1)
         }
         parseUser(s)?.let { return it }
-        PuPersonalCode.decode(s).let { plain ->
+        PuPersonalCodec.decode(s).let { plain ->
             if (plain.isNotEmpty()) parseUser(plain)?.let { return it }
         }
         return PuScanResult.Text(raw)
     }
 
     /** 个人码 Base64 → 明文；非法输入返回 `""`。 */
-    fun decryptPersonalCode(b64: String): String = PuPersonalCode.decode(b64)
+    fun decryptPersonalCode(b64: String): String = PuPersonalCodec.decode(b64)
 
     private fun parseUser(plain: String): PuScanResult.User? {
         if (!plain.startsWith(USER_PREFIX)) return null

@@ -9,8 +9,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 上游 `LoginApi.java` 的移植（注意：登录走的是 `api.pocketuni.net`，
- * 与业务接口的 `apis.pocketuni.net` 不同）。
+ * 上游 `LoginApi.java` 的移植（与业务接口同一主机 `apis.pocketuni.net`，
+ * 上游 `LoginApi` 用 `Api.BASE + PATH`）。
  *
  * 错误文案与上游逐字一致：学号/密码为空、go_id 非法、`code != 0`、
  * 缺少 data、token 不是 32 位十六进制、非 JSON 响应、网络错误。
@@ -20,7 +20,7 @@ object PuLoginApi {
 
     const val PATH = "/uc/user/login"
 
-    private const val HOST = "https://api.pocketuni.net"
+    private const val HOST = "https://apis.pocketuni.net"
     private const val CONNECT_MS = 12000
     private const val READ_MS = 20000
     private const val LOGIN_UA = "Dalvik/2.1.0 (Linux; U; Android 15; 23127PN0CC Build/fc0a665.0)"
@@ -57,7 +57,7 @@ object PuLoginApi {
 
                 val status = conn.responseCode
                 val text = readAll(if (status >= 400) conn.errorStream else conn.inputStream)
-                val json = if (text.isBlank()) null else runCatching { JSONObject(text) }.getOrNull()
+                val json = (if (text.isBlank()) null else runCatching { JSONObject(text) }.getOrNull())
                     ?: throw PuException("登录接口返回非 JSON: HTTP $status", 502)
 
                 val code = json.optInt("code", 0)

@@ -36,8 +36,11 @@ class QrPayloadFitTest {
         val fit = PuActions.fitSignPayload(full(longTitle), slim())
         assertEquals("cut", fit.level)
         assertTrue(PuActions.utf8Bytes(fit.json) <= 120)
-        assertTrue(fit.json.contains("…"))
-        assertEquals("full", if (fit.level == "full") "full" else "cut")
+        // json.org 的 JSONObject.toString() 会把 U+2000..U+20FF 转义成 \uXXXX，
+        // 所以省略号在串里是 "\\u2026"；解析回来断言语义更稳。
+        assertTrue(JSONObject(fit.json).optString("title").endsWith("…"))
+        assertTrue(fit.json.contains("\"code\":\"$code\""))
+        assertTrue(fit.json.contains("\"id\":\"$id\""))
     }
 
     @Test
