@@ -9,7 +9,9 @@ import android.util.LruCache
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,11 +39,9 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.ElectricBike
 import androidx.compose.material.icons.outlined.ElectricalServices
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Login
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
@@ -68,11 +68,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -147,6 +150,14 @@ fun SdgyAppsContent(
         top = 12.dp,
         bottom = 28.dp,
     ),
+    /**
+     * 由功能页提权保存的功能表；传入后本组件不再自己维护分组，
+     * 刷新结果通过 [onGroupsChange] 交回外部（收藏页要读同一份数据）。
+     */
+    externalGroups: List<SdgyAppGroup>? = null,
+    onGroupsChange: (List<SdgyAppGroup>) -> Unit = {},
+    /** 长按某个功能，用来收藏。 */
+    onLongPressEntry: ((SdgyAppEntry, Rect) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val repository = rememberSdgyRepository()
@@ -156,9 +167,10 @@ fun SdgyAppsContent(
     val loggedIn = account?.loggedIn == true
 
     val cached = remember { SdgyAppsStore.load(context) }
-    var groups by remember {
+    var localGroups by remember {
         mutableStateOf(cached?.groups ?: SdgyAppCatalog.fallback())
     }
+    val groups = externalGroups ?: localGroups
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
@@ -172,7 +184,8 @@ fun SdgyAppsContent(
             val list = repository.call { it.appList("1") }
             val parsed = SdgyAppCatalog.withNativeTools(SdgyAppCatalog.parse(list))
             if (parsed.isNotEmpty()) {
-                groups = parsed
+                localGroups = parsed
+                onGroupsChange(parsed)
                 SdgyAppsStore.save(context, list.toString())
                 error = null
             } else {
@@ -208,7 +221,7 @@ fun SdgyAppsContent(
             onOpenNative(native)
             return
         }
-        if (entry.lx == "5" && entry.url.isNotBlank()) {
+        if (entry.opensExternalApp) {
             runCatching {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(entry.url)))
             }.onFailure {
@@ -216,7 +229,7 @@ fun SdgyAppsContent(
             }
             return
         }
-        if (entry.lx == "1" || entry.url.startsWith("native_")) {
+        if (entry.isAppInternal) {
             toast(context, "这个功能暂时不能在管院通里打开")
             return
         }
@@ -292,6 +305,7 @@ fun SdgyAppsContent(
                             AppChipRows(
                                 shownGroups.flatMap { it.apps }.distinctBy { it.id },
                                 onOpen = ::openEntry,
+                                onLongPress = onLongPressEntry,
                             )
                         } else {
                             AppGrid(
@@ -311,7 +325,7 @@ fun SdgyAppsContent(
                             }
                         }
                         Spacer(Modifier.height(10.dp))
-                        AppChipRows(group.apps, onOpen = ::openEntry)
+                        AppChipRows(group.apps, onOpen = ::openEntry, onLongPress = onLongPressEntry)
                     }
                 }
             } else {
@@ -503,26 +517,38 @@ private fun RefreshButton(
 }
 
 @Composable
-private fun AppChipRows(apps: List<SdgyAppEntry>, onOpen: (SdgyAppEntry) -> Unit) {
+private fun AppChipRows(
+    apps: List<SdgyAppEntry>,
+    onOpen: (SdgyAppEntry) -> Unit,
+    onLongPress: ((SdgyAppEntry, Rect) -> Unit)? = null,
+) {
     FlowChipRow(modifier = Modifier.fillMaxWidth()) {
         apps.forEach { entry ->
-            AppChip(entry = entry, onOpen = onOpen)
+            AppChip(entry = entry, onOpen = onOpen, onLongPress = onLongPress)
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppChip(
     entry: SdgyAppEntry,
     onOpen: (SdgyAppEntry) -> Unit,
+    onLongPress: ((SdgyAppEntry, Rect) -> Unit)? = null,
 ) {
     val accent = ServiceCatalog.byId("sdgy")?.accent ?: MaterialTheme.colorScheme.primary
+    // 长按时才取位置；用最新的布局坐标，避免闭包拿到过期的。
+    var chipBounds by remember { mutableStateOf(Rect.Zero) }
     Surface(
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .clickable { onOpen(entry) },
+            .onGloballyPositioned { chipBounds = it.boundsInWindow() }
+            .combinedClickable(
+                onClick = { onOpen(entry) },
+                onLongClick = onLongPress?.let { open -> { open(entry, chipBounds) } },
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -646,9 +672,7 @@ private fun SdgyPage.icon(): ImageVector = when (this) {
     SdgyPage.Timetable -> Icons.Outlined.CalendarMonth
     SdgyPage.Pay -> Icons.Outlined.CreditCard
     SdgyPage.Power -> Icons.Outlined.ElectricalServices
-    SdgyPage.Scan -> Icons.Outlined.QrCodeScanner
     SdgyPage.Shot -> Icons.Outlined.EditNote
-    SdgyPage.Xbc -> Icons.Outlined.ElectricBike
     SdgyPage.Hub -> Icons.Outlined.Search
 }
 

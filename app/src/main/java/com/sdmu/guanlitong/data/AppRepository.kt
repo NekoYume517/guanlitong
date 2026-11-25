@@ -13,6 +13,7 @@ class AppRepository(context: Context) {
             .filter { it.type == WidgetType.QuickActions }
             .map { it.id },
     )
+    val favorites = FavoriteStore(context)
 
     fun urlFor(service: SchoolService): String = settings.urlFor(service)
 }

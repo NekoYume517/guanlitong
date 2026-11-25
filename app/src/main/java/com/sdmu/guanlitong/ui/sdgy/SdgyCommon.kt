@@ -1,10 +1,7 @@
 package com.sdmu.guanlitong.ui.sdgy
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +33,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.sdmu.guanlitong.data.sdgy.SdgyException
@@ -147,18 +143,6 @@ fun QrImage(text: String, modifier: Modifier = Modifier, sizePx: Int = 720) {
         )
     }
 }
-
-/** 运行时权限的统一申请入口。 */
-@Composable
-fun rememberPermissionRequester(onResult: (Boolean) -> Unit): (String) -> Unit {
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> onResult(granted) }
-    return { permission -> launcher.launch(permission) }
-}
-
-fun Context.hasPermission(permission: String): Boolean =
-    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
 /** 页面异步任务里的错误文案：保留业务原因，不把异常类名或协议细节交给用户。 */
 fun Throwable.sdgyMessage(): String = when {

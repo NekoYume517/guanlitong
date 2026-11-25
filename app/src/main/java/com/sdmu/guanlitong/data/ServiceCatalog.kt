@@ -2,7 +2,6 @@ package com.sdmu.guanlitong.data
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.ui.graphics.Color
@@ -40,21 +39,11 @@ object ServiceCatalog {
             icon = Icons.Outlined.PhoneAndroid,
             accent = Color(0xFF1E9E6A),
         ),
-        SchoolService(
-            id = "other",
-            name = "其他",
-            summary = "扫一扫 · 小白超人",
-            defaultUrl = "",
-            loginMode = LoginMode.WEB,
-            icon = Icons.Outlined.MoreHoriz,
-            accent = Color(0xFF7657A5),
-            requiresAccount = false,
-        ),
     )
 
-    /** 「功能」页左侧：教务系统、山管 App、其他；后两者互不混入原生工具。 */
+    /** 「功能」页顶部的分类：教务系统、山管 App。 */
     val featureServices: List<SchoolService>
-        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" || it.id == "other" }
+        get() = services.filter { it.id == "jwxt" || it.id == "sdgy" }
 
     /** 「我的」与概览「账号状态」展示需要独立登录的服务；抢课助手只作为数据源。 */
     val accountServices: List<SchoolService>

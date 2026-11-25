@@ -21,7 +21,15 @@ data class SdgyAppEntry(
     val iconUrl: String,
     val description: String = "",
     val nativePage: SdgyPage? = null,
-)
+) {
+    /** 官方用 `lx=5` 标记「跳到另一个 App」，这类条目不走内置网页。 */
+    val opensExternalApp: Boolean
+        get() = lx == "5" && url.isNotBlank()
+
+    /** 官方 App 自己的原生功能（拍照、定位等），没有网页地址，管院通打不开。 */
+    val isAppInternal: Boolean
+        get() = lx == "1" || url.startsWith("native_")
+}
 
 data class SdgyAppGroup(
     val name: String,
@@ -38,10 +46,6 @@ data class SdgyNativeTool(
 
 object SdgyAppCatalog {
 
-    /** 移到功能页「其他」二级标签，山管功能总表不再显示。 */
-    private val EXCLUDED_NATIVE_PAGES = setOf(SdgyPage.Scan, SdgyPage.Xbc)
-
-    /** 官方列表里没有、但我们做成了原生页面的工具。 */
     val nativeTools = listOf(
         SdgyNativeTool(SdgyPage.Timetable, "课表", "按周查看 · 课程详情"),
         SdgyNativeTool(SdgyPage.Pay, "一卡通付款码", "余额 · 付款码"),
@@ -219,7 +223,7 @@ object SdgyAppCatalog {
             iconUrl = icon(iconId),
             description = obj.field("MS", "ms", "DESC", "desc"),
         )
-        return entry.copy(nativePage = nativePageOf(entry).takeUnless { it in EXCLUDED_NATIVE_PAGES })
+        return entry.copy(nativePage = nativePageOf(entry))
     }
 
     private fun nativePageOf(entry: SdgyAppEntry): SdgyPage? {
@@ -230,9 +234,7 @@ object SdgyAppCatalog {
                 SdgyPage.Timetable
             id == "ewm" || id == "native_pay" || id == "pay_native" || name.contains("付款码") ->
                 SdgyPage.Pay
-            id == "scan" || id == "native_scan" || name == "扫一扫" -> SdgyPage.Scan
             id == "native_shot" || name.contains("请销假生成器") -> SdgyPage.Shot
-            id == "native_xbc" || name.contains("小白超人") -> SdgyPage.Xbc
             id == "native_power" || name.contains("宿舍用电") -> SdgyPage.Power
             else -> null
         }

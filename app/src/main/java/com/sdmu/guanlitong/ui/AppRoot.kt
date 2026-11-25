@@ -1,5 +1,8 @@
 package com.sdmu.guanlitong.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -76,11 +79,9 @@ import com.sdmu.guanlitong.ui.overview.OverviewScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyHubScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyPayScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyPowerScreen
-import com.sdmu.guanlitong.ui.sdgy.SdgyScanScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyShotScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyTimetableScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyWebScreen
-import com.sdmu.guanlitong.ui.sdgy.SdgyXbcScreen
 import com.sdmu.guanlitong.ui.update.UpdateDialog
 import com.sdmu.guanlitong.ui.update.UpdateState
 import com.sdmu.guanlitong.ui.web.ServiceWebScreen
@@ -92,7 +93,7 @@ private sealed interface Dest {
     data class Web(val serviceId: String, val startUrl: String? = null) : Dest
     data class Account(val serviceId: String) : Dest
     data class Jwxt(val page: JwxtPage = JwxtPage.Timetable) : Dest
-    data class Sdgy(val page: SdgyPage = SdgyPage.Hub, val xbcCode: String? = null) : Dest
+    data class Sdgy(val page: SdgyPage = SdgyPage.Hub) : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(
         val title: String,
@@ -261,9 +262,22 @@ fun AppRoot(repository: AppRepository) {
 
             is FeatureAction.Sdgy -> goForward(Dest.Sdgy(action.page))
 
-            is FeatureAction.SdgyApp -> goForward(
-                Dest.SdgyWeb(action.action.title, action.action.appId, action.action.url, action.action.lx)
-            )
+            is FeatureAction.SdgyApp -> {
+                val web = action.action
+                when {
+                    web.opensExternalApp -> runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(web.url)))
+                    }.onFailure {
+                        Toast.makeText(context, "没有能打开「${web.title}」的应用", Toast.LENGTH_SHORT).show()
+                    }
+                    // 官方 App 自己的原生功能没有网页地址，打不开。
+                    web.isAppInternal ->
+                        Toast.makeText(context, "这个功能暂时不能在管院通里打开", Toast.LENGTH_SHORT).show()
+                    // 没登录山管时，内置网页只会显示加载失败，直接去登录页。
+                    accounts["sdgy"]?.loggedIn != true -> goForward(Dest.Account("sdgy"))
+                    else -> goForward(Dest.SdgyWeb(web.title, web.appId, web.url, web.lx))
+                }
+            }
 
             is FeatureAction.Web -> goForward(Dest.Web(action.serviceId, action.url))
 
@@ -401,6 +415,7 @@ fun AppRoot(repository: AppRepository) {
                                         if (jwxtSource == JwxtSource.Grab) "grab" else "jwxt"
                                     ],
                                     grabSource = jwxtSource == JwxtSource.Grab,
+                                    favorites = repository.favorites,
                                 )
 
                                 else -> MineScreen(
@@ -502,25 +517,7 @@ fun AppRoot(repository: AppRepository) {
 
                             SdgyPage.Power -> SdgyPowerScreen(onBack = { goBack() })
 
-                            SdgyPage.Scan -> SdgyScanScreen(
-                                onBack = { goBack() },
-                                onOpenXbc = { code ->
-                                    goForward(Dest.Sdgy(SdgyPage.Xbc, code))
-                                },
-                            )
-
                             SdgyPage.Shot -> SdgyShotScreen(onBack = { goBack() })
-
-                            SdgyPage.Xbc -> SdgyXbcScreen(
-                                initialCode = dest.xbcCode,
-                                onBack = {
-                                    if (dest.xbcCode != null) {
-                                        overlay = Dest.Sdgy(SdgyPage.Scan)
-                                    } else {
-                                        goBack()
-                                    }
-                                },
-                            )
                         }
 
                         is Dest.SdgyWeb -> SdgyWebScreen(

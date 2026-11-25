@@ -6,19 +6,17 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.ElectricBike
 import androidx.compose.material.icons.outlined.ElectricalServices
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.HowToReg
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** 教务系统里的原生页面。 */
 enum class JwxtPage { Timetable, Hub, Grades, Exams, Selection, Tasks }
 
 /** 山管app 内置的原生页面。 */
-enum class SdgyPage { Hub, Timetable, Pay, Power, Scan, Shot, Xbc }
+enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
@@ -26,6 +24,10 @@ data class SdgyWebAction(
     val appId: String,
     val url: String,
     val lx: String,
+    /** 官方用 `lx=5` 标记「跳到另一个 App」，这类条目不走内置网页。 */
+    val opensExternalApp: Boolean = false,
+    /** 官方 App 自己的原生功能（拍照、定位等），没有网页地址，管院通打不开。 */
+    val isAppInternal: Boolean = false,
 )
 
 /** 点击功能后要去哪里。 */
@@ -154,28 +156,12 @@ object FeatureCatalog {
             action = FeatureAction.Sdgy(SdgyPage.Power),
         ),
         ServiceFeature(
-            id = "other.scan",
-            serviceId = "other",
-            title = "扫一扫",
-            subtitle = "识别二维码 · 车牌码",
-            icon = Icons.Outlined.QrCodeScanner,
-            action = FeatureAction.Sdgy(SdgyPage.Scan),
-        ),
-        ServiceFeature(
             id = "sdgy.shot",
             serviceId = "sdgy",
             title = "请销假",
             subtitle = "生成申请图片",
             icon = Icons.Outlined.EditNote,
             action = FeatureAction.Sdgy(SdgyPage.Shot),
-        ),
-        ServiceFeature(
-            id = "other.xbc",
-            serviceId = "other",
-            title = "小白超人",
-            subtitle = "电动车地图 · 扫码开锁",
-            icon = Icons.Outlined.ElectricBike,
-            action = FeatureAction.Sdgy(SdgyPage.Xbc),
         ),
     )
 
@@ -192,7 +178,16 @@ object FeatureCatalog {
         } else if (native != null) {
             FeatureAction.Sdgy(native)
         } else {
-            FeatureAction.SdgyApp(SdgyWebAction(entry.name, entry.id, entry.url, entry.lx))
+            FeatureAction.SdgyApp(
+                SdgyWebAction(
+                    title = entry.name,
+                    appId = entry.id,
+                    url = entry.url,
+                    lx = entry.lx,
+                    opensExternalApp = entry.opensExternalApp,
+                    isAppInternal = entry.isAppInternal,
+                )
+            )
         }
         return ServiceFeature(
             id = "sdgy.app.${entry.id}",
