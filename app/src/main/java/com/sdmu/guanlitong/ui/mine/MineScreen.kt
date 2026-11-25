@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -62,6 +63,7 @@ fun MineScreen(
     versionName: String = "",
     updateState: UpdateState = UpdateState.Idle,
     onCheckUpdate: () -> Unit = {},
+    onShowOnboarding: () -> Unit = {},
 ) {
     val accountServices = ServiceCatalog.accountServices
     // 账号入口只有一个，登录状态跟随当前教务数据来源显示。
@@ -109,6 +111,14 @@ fun MineScreen(
                 title = "检查更新",
                 subtitle = updateStatusText(updateState, versionName),
                 onClick = onCheckUpdate,
+            )
+        }
+        item {
+            SettingsRow(
+                icon = Icons.Outlined.Slideshow,
+                title = "重看启动引导",
+                subtitle = "再看一遍首次使用的介绍",
+                onClick = onShowOnboarding,
             )
         }
         item {

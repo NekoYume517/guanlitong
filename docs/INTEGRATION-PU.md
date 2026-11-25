@@ -170,14 +170,13 @@ UTF-8 字节数上限 `QR_MAX_BYTES = 120`，四级降级：
 
 | 目标文件 | 对应 F-PU 前端区块 | 内容 |
 |---|---|---|
-| `PuHubScreen.kt` | `index.html` 首页 | 账号卡 + 8 个入口卡片 |
 | `PuActivitiesScreen.kt` | 「活动」tab | 列表 + grep 搜索 + 分页 + 批量报名 |
 | `PuActivityDetailScreen.kt` | 活动详情弹层 | 详情 + 报名/取消/签到/签退/签到状态/生成签到码 |
 | `PuMineScreen.kt` | 「我的活动」 | type 0/3/4 切换 + 分页 |
 | `PuCreditScreen.kt` | 「学时」 | 总学时 + 按年聚合 + 明细 |
 | `PuFriendsScreen.kt` | 「好友」 | friend/followee/follower 三 tab + 关注/取关 |
 | `PuPersonalCodeScreen.kt` | 「我的二维码」 | 二维码 + 倒计时换码 |
-| `PuScanScreen.kt` | 「扫一扫」 | 复用 `SdgyScannerDialog` + 分类结果 + 跳转 |
+| `PuScanScreen.kt` | 「扫一扫」 | 复用 `ui/components/QrScannerDialog` + 分类结果 + 跳转 |
 | `PuSignCodeScreen.kt` | 「签到码」 | 主办方动态码（大屏显示 + 倒计时） |
 | `ui/account/PuLoginSection.kt` | 登录区 | 仿 `SdgyLoginSection`，学校 ID + 账号 + 密码 |
 
@@ -201,30 +200,33 @@ UTF-8 字节数上限 `QR_MAX_BYTES = 120`，四级降级：
 ### 4.1 导航接入（`ui/AppRoot.kt`）
 
 ```
-Dest.Pu(page: PuPage = Hub, activityId: Long? = null)
+Dest.Pu(page: PuPage = Activities, activityId: Long? = null)
 ```
 - `openFeature()` 增加 `is FeatureAction.Pu -> goForward(Dest.Pu(action.page))`
 - 覆盖页 `when (dest)` 增加 `is Dest.Pu -> when (dest.page) { ... }`
 - `AnimatedContent` 转场由 `pageDirection` 自动生效，无需额外处理
+- 页面按栈返回：`AppRoot` 维护 `destHistory`，`goForward` 压栈、`goBack` 出栈，
+  所以「列表 → 详情 → 签到码」是逐层返回，而不是每层都回主导航
+- 不再有 `PuHub` 中间页：功能页的「口袋校园」分类直接列出全部入口
 
 ### 4.2 页面跳转图
 
 ```
-PuHub ─┬─→ Activities ─→ ActivityDetail ─┬─→ SignCode
-       ├─→ Mine                          └─→ Scan(结果回填 mid)
-       ├─→ Credit
-       ├─→ Friends
-       ├─→ PersonalCode
-       └─→ Scan ─┬─ kind=user     → 好友主页（otherUser → follow/unfollow）
-                 ├─ kind=activity → 有 id：ActivityDetail(签到)
-                 │                  无 id：选未签到活动 → scanSignIn
-                 └─ kind=text     → 提示「无法识别」+ 复制
+功能页「口袋校园」分类 ─┬─→ Activities ─→ ActivityDetail ─┬─→ SignCode
+                        ├─→ Mine ─→ ActivityDetail
+                        ├─→ Credit
+                        ├─→ Friends
+                        ├─→ PersonalCode
+                        └─→ Scan ─┬─ kind=user     → 好友主页（otherUser → follow/unfollow）
+                                  ├─ kind=activity → 有 id：ActivityDetail(签到)
+                                  │                  无 id：选未签到活动 → scanSignIn
+                                  └─ kind=text     → 提示「无法识别」+ 复制
 ```
 
 ### 4.3 未登录门
 
-- `PuHub` 在 `!loggedIn` 时只显示登录引导卡，其余入口置灰
-- 其余 PU 页面进入前检查 `PuCredStore.token` 为空 → 跳 `Dest.Account("pu")`
+- 每个 PU 页面在 `!loggedIn` 时统一显示登录引导（`PuLoginPrompt`），不发网络请求
+- 进入页面时检查 `PuCredStore.token` 为空 → 只显示引导，不自动跳 `Dest.Account("pu")`
 - 401（body `code:401`）→ 清 token、`AccountStore.signOut("pu")`、提示「登录已失效」
 
 ### 4.4 签到/签退时间窗判定（`PuActions` 内部，文案逐字照抄）
@@ -275,7 +277,6 @@ app/src/main/java/com/sdmu/guanlitong/data/pu/PuPersonalCode.kt
 app/src/main/java/com/sdmu/guanlitong/data/pu/PuScan.kt
 app/src/main/java/com/sdmu/guanlitong/data/pu/PuRepository.kt
 app/src/main/java/com/sdmu/guanlitong/ui/account/PuLoginSection.kt
-app/src/main/java/com/sdmu/guanlitong/ui/pu/PuHubScreen.kt
 app/src/main/java/com/sdmu/guanlitong/ui/pu/PuActivitiesScreen.kt
 app/src/main/java/com/sdmu/guanlitong/ui/pu/PuActivityDetailScreen.kt
 app/src/main/java/com/sdmu/guanlitong/ui/pu/PuMineScreen.kt
@@ -294,10 +295,10 @@ docs/INTEGRATION-PU.md                                     ← 本文
 | `data/ServiceCatalog.kt` | `services` 列表 | 追加 `pu` 条目（见 §6.1） |
 | `data/ServiceCatalog.kt` | `featureServices` | 条件加 `\|\| it.id == "pu"` |
 | `data/ServiceCatalog.kt` | `accountServices` | 条件加 `\|\| it.id == "pu"` |
-| `data/FeatureCatalog.kt` | 文件头 | 加 `enum class PuPage { Hub, Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }` |
+| `data/FeatureCatalog.kt` | 文件头 | 加 `enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }` |
 | `data/FeatureCatalog.kt` | `FeatureAction` | 加 `data class Pu(val page: PuPage) : FeatureAction` |
 | `data/FeatureCatalog.kt` | `targetServiceId` | 加 `is FeatureAction.Pu -> serviceId`（**穷尽 when，漏写编译失败**） |
-| `data/FeatureCatalog.kt` | `features` 列表 | 追加 8 条（见 §6.2） |
+| `data/FeatureCatalog.kt` | `features` 列表 | 追加 7 条（见 §6.2） |
 | `ui/AppRoot.kt` | `Dest` 密封接口 | 加 `data class Pu(...)` |
 | `ui/AppRoot.kt` | `openFeature()` | 加 `is FeatureAction.Pu -> goForward(Dest.Pu(action.page))` |
 | `ui/AppRoot.kt` | 覆盖页 `when (dest)` | 加 `is Dest.Pu -> ...` |
@@ -334,10 +335,9 @@ SchoolService(
 
 > `icon` 不得与 `jwxt` 的 `Icons.Outlined.School` 重复；`accent` 与现有四色（`2F6BFF`/`F08A24`/`1E9E6A`/`7657A5`）区分。
 
-### 6.2 `FeatureCatalog` 新增 8 条
+### 6.2 `FeatureCatalog` 新增 7 条
 
 ```kotlin
-ServiceFeature(id = "pu.hub",          serviceId = "pu", title = "活动中心",   subtitle = "报名 · 签到 · 学时", icon = Icons.Outlined.Dashboard,      action = FeatureAction.Pu(PuPage.Hub))
 ServiceFeature(id = "pu.activities",   serviceId = "pu", title = "活动列表",   subtitle = "全部活动 · 搜索",   icon = Icons.Outlined.EventNote,      action = FeatureAction.Pu(PuPage.Activities))
 ServiceFeature(id = "pu.mine",         serviceId = "pu", title = "我的活动",   subtitle = "进行中 · 已结束",   icon = Icons.Outlined.History,        action = FeatureAction.Pu(PuPage.Mine))
 ServiceFeature(id = "pu.credit",       serviceId = "pu", title = "学时统计",   subtitle = "总量 · 按年聚合",   icon = Icons.Outlined.WorkspacePremium, action = FeatureAction.Pu(PuPage.Credit))
@@ -471,7 +471,7 @@ object PuSign {
 
 - 只读功能（列表/我的/学时/个人码/扫码/签到/签退/取消）**全部照常工作**
 - `join()` / `autoJoin()` 直接抛 `PuException("当前设备架构不支持报名，请使用官方 App 报名")`
-- `PuHub` 顶部显示一条低干扰提示条：「本机不支持签名，报名功能不可用」
+- 活动列表顶部显示一条低干扰提示条：「本机不支持签名，报名功能不可用」
 - 不弹崩溃、不静默失败
 
 ---

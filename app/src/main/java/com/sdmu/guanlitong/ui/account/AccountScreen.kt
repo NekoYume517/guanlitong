@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -103,6 +104,8 @@ fun AccountScreen(
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var messageIsError by remember { mutableStateOf(false) }
+    // 官方教务登录后默认只留账号卡片，需要重新登录时再展开验证码表单。
+    var jwxtFormOpen by remember { mutableStateOf(false) }
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
@@ -150,7 +153,8 @@ fun AccountScreen(
                 )
             }
 
-            if (serviceUrl.isBlank()) {
+            // 口袋校园只用 App 账号，没有网页地址，不需要提示。
+            if (serviceUrl.isBlank() && service.id != "pu") {
                 WarningCard(
                     text = "这个服务暂时用不了。",
                 )
@@ -163,29 +167,53 @@ fun AccountScreen(
             }
 
             if (service.id == "jwxt" && jwxtSource == JwxtSource.Official) {
-                JwxtLoginPanel(
-                    serviceUrl = serviceUrl.ifBlank { JwxtOrigin.LOGIN_URL },
-                    initialUsername = username,
-                    initialPassword = password,
-                    rememberInitial = rememberPassword,
-                    onLoggedIn = { user, pwd, remember, cookies ->
-                        CookieUtils.replaceFor(JwxtOrigin.ORIGIN, cookies, "/jwglxt")
-                        if (remember) {
-                            store.markLoggedIn(
-                                serviceId = service.id,
-                                username = user,
-                                password = pwd,
+                if (account.loggedIn) {
+                    LoggedInAccountCard(
+                        title = "教务系统账号",
+                        name = account.username,
+                        onSignOut = {
+                            CookieUtils.clearFor(
+                                serviceUrl.ifBlank { JwxtOrigin.LOGIN_URL },
                             )
-                        } else {
-                            store.forgetPassword(service.id)
-                            store.markLoggedIn(serviceId = service.id, username = user)
-                        }
-                        username = user
-                        rememberPassword = remember
-                        toast("登录成功")
-                    },
-                )
-                HorizontalDivider()
+                            JwxtCache.clear(context)
+                            store.signOut(service.id, clearPassword = false)
+                            jwxtFormOpen = false
+                            toast("已退出登录")
+                        },
+                    )
+                    TextButton(
+                        onClick = { jwxtFormOpen = !jwxtFormOpen },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (jwxtFormOpen) "收起登录表单" else "重新登录")
+                    }
+                }
+                if (!account.loggedIn || jwxtFormOpen) {
+                    JwxtLoginPanel(
+                        serviceUrl = serviceUrl.ifBlank { JwxtOrigin.LOGIN_URL },
+                        initialUsername = username,
+                        initialPassword = password,
+                        rememberInitial = rememberPassword,
+                        onLoggedIn = { user, pwd, remember, cookies ->
+                            CookieUtils.replaceFor(JwxtOrigin.ORIGIN, cookies, "/jwglxt")
+                            if (remember) {
+                                store.markLoggedIn(
+                                    serviceId = service.id,
+                                    username = user,
+                                    password = pwd,
+                                )
+                            } else {
+                                store.forgetPassword(service.id)
+                                store.markLoggedIn(serviceId = service.id, username = user)
+                            }
+                            username = user
+                            rememberPassword = remember
+                            jwxtFormOpen = false
+                            toast("登录成功")
+                        },
+                    )
+                    HorizontalDivider()
+                }
             }
 
             when {
@@ -201,6 +229,7 @@ fun AccountScreen(
                 )
 
                 service.loginMode == LoginMode.CREDENTIAL -> CredentialSection(
+                    serviceName = service.name,
                     username = username,
                     onUsernameChange = { username = it },
                     password = password,
@@ -259,6 +288,7 @@ fun AccountScreen(
                     service = service,
                     serviceUrl = serviceUrl,
                     loggedIn = account.loggedIn,
+                    accountName = account.username,
                     nativeLoginAvailable = jwxtSource == JwxtSource.Official,
                     onOpenWeb = onOpenWeb,
                     onOpenTimetable = onOpenTimetable,
@@ -389,6 +419,7 @@ private fun ServiceHeader(service: SchoolService, account: Account) {
 
 @Composable
 private fun CredentialSection(
+    serviceName: String,
     username: String,
     onUsernameChange: (String) -> Unit,
     password: String,
@@ -406,6 +437,31 @@ private fun CredentialSection(
     onOpenWeb: () -> Unit,
     onSignOut: () -> Unit,
 ) {
+    // 登录成功后只剩这张卡片和「打开网页」，不再摆一套表单。
+    if (loggedIn) {
+        LoggedInAccountCard(
+            title = "$serviceName 账号",
+            name = username,
+            onSignOut = onSignOut,
+        )
+        if (serviceUrl.isNotBlank()) {
+            FilledTonalButton(
+                onClick = onOpenWeb,
+                modifier = Modifier.fillMaxWidth(),
+                shape = CircleShape,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("打开网页")
+            }
+        }
+        return
+    }
+
     OutlinedTextField(
         value = username,
         onValueChange = onUsernameChange,
@@ -474,12 +530,6 @@ private fun CredentialSection(
             Spacer(modifier = Modifier.width(8.dp))
             Text("打开网页")
         }
-        if (loggedIn) {
-            OutlinedButton(
-                onClick = onSignOut,
-                modifier = Modifier.weight(1f),
-            ) { Text("退出登录") }
-        }
     }
 
     Text(
@@ -494,23 +544,27 @@ private fun WebSection(
     service: SchoolService,
     serviceUrl: String,
     loggedIn: Boolean,
+    accountName: String,
     nativeLoginAvailable: Boolean = true,
     onOpenWeb: () -> Unit,
     onOpenTimetable: (() -> Unit)?,
     onSignOut: () -> Unit,
 ) {
-    Text(
-        text = when {
-            service.id != "jwxt" ->
-                "用学校统一身份认证登录。"
-            nativeLoginAvailable ->
-                "用学号密码登录，验证码会自动识别。"
-            else ->
-                "想直接用学校系统，把上方的数据来源切到「官方教务系统」。"
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    // 登录后这句「怎么登录」就不再需要，卡片已经说明状态。
+    if (!loggedIn) {
+        Text(
+            text = when {
+                service.id != "jwxt" ->
+                    "用学校统一身份认证登录。"
+                nativeLoginAvailable ->
+                    "用学号密码登录，验证码会自动识别。"
+                else ->
+                    "想直接用学校系统，把上方的数据来源切到「官方教务系统」。"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 
     if (onOpenTimetable != null) {
         FilledTonalButton(
@@ -542,11 +596,13 @@ private fun WebSection(
         Text("打开网页")
     }
 
-    if (loggedIn) {
-        OutlinedButton(
-            onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("退出登录") }
+    // 官方教务系统在页面上方已经有一张账号卡片，这里不重复摆。
+    if (loggedIn && !nativeLoginAvailable) {
+        LoggedInAccountCard(
+            title = "${service.name}账号",
+            name = accountName,
+            onSignOut = onSignOut,
+        )
     }
 }
 

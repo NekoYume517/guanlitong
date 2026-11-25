@@ -2,7 +2,6 @@ package com.sdmu.guanlitong.ui.account
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -28,7 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -114,13 +111,35 @@ fun PuLoginSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TokenNotice()
+        if (!current.loggedIn) {
+            TokenNotice()
+        }
 
         if (current.loggedIn) {
-            LoggedInCard(service = service, account = current)
-        }
-        if (current.loggedIn && !tokenReady) {
-            StaleTokenCard()
+            LoggedInAccountCard(
+                title = "口袋校园账号",
+                name = current.nickname.ifBlank { current.username },
+                onSignOut = {
+                    scope.launch {
+                        loading = true
+                        runCatching { cred.clear() }
+                        store.signOut(sid, clearPassword = false)
+                        password = ""
+                        message = "已退出登录"
+                        messageIsError = false
+                        loading = false
+                    }
+                },
+            )
+            if (!tokenReady) {
+                StaleTokenCard()
+            }
+            Text(
+                "账号密码仅用于登录口袋校园；登录信息加密保存在本机，不会在界面显示。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
         }
 
         OutlinedTextField(
@@ -267,26 +286,6 @@ fun PuLoginSection(
             Text(if (current.loggedIn) "重新登录口袋校园" else "登录口袋校园")
         }
 
-        if (current.loggedIn) {
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        loading = true
-                        runCatching { cred.clear() }
-                        store.signOut(sid, clearPassword = false)
-                        password = ""
-                        message = "已退出登录"
-                        messageIsError = false
-                        loading = false
-                    }
-                },
-                enabled = !loading,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("退出登录")
-            }
-        }
-
         Text(
             "账号密码仅用于登录口袋校园；登录信息加密保存在本机，不会在界面显示。",
             style = MaterialTheme.typography.bodySmall,
@@ -331,51 +330,6 @@ private fun TokenNotice() {
     }
 }
 
-/** 已登录摘要：不显示 token，账号名走 `mask()`。 */
-@Composable
-private fun LoggedInCard(service: SchoolService, account: Account) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = service.accent.copy(alpha = 0.16f),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        service.icon,
-                        contentDescription = null,
-                        tint = service.accent,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    account.nickname.ifBlank { "已登录" },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    account.username.takeIf { it.isNotBlank() }?.let { "账号 ${mask(it)}" }
-                        ?: "已连接口袋校园服务器",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
 
 /** 账号态是「已登录」但 Keystore 里没有 token（清数据、换机恢复备份等）。 */
 @Composable

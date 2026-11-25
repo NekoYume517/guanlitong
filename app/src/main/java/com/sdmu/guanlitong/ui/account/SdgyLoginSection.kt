@@ -134,6 +134,37 @@ internal fun SdgyLoginSection(
             }
         }
 
+        if (account.loggedIn) {
+            LoggedInAccountCard(
+                title = "山管 App 账号",
+                name = account.displayName.ifBlank { account.username },
+                onSignOut = {
+                    loading = true
+                    message = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                SdgySessionManager.signOut(context)
+                            }
+                            store.signOut("sdgy", clearPassword = false)
+                            sessionReady = false
+                            statusError = null
+                            message = "已退出登录"
+                            messageIsError = false
+                        } finally {
+                            loading = false
+                        }
+                    }
+                },
+            )
+            Text(
+                text = "账号密码只发给学校，密码加密保存在本机。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
@@ -272,31 +303,6 @@ internal fun SdgyLoginSection(
             Text(
                 if (account.loggedIn) "重新登录山管 App" else "登录山管 App",
             )
-        }
-
-        if (account.loggedIn) {
-            OutlinedButton(
-                onClick = {
-                    loading = true
-                    message = null
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                SdgySessionManager.signOut(context)
-                            }
-                            store.signOut("sdgy", clearPassword = false)
-                            sessionReady = false
-                            statusError = null
-                            message = "已退出登录"
-                            messageIsError = false
-                        } finally {
-                            loading = false
-                        }
-                    }
-                },
-                enabled = !loading,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("退出登录") }
         }
 
         Text(

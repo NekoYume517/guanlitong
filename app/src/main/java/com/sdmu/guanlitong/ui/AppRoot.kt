@@ -5,7 +5,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,7 +82,6 @@ import com.sdmu.guanlitong.ui.pu.PuActivitiesScreen
 import com.sdmu.guanlitong.ui.pu.PuActivityDetailScreen
 import com.sdmu.guanlitong.ui.pu.PuCreditScreen
 import com.sdmu.guanlitong.ui.pu.PuFriendsScreen
-import com.sdmu.guanlitong.ui.pu.PuHubScreen
 import com.sdmu.guanlitong.ui.pu.PuMineScreen
 import com.sdmu.guanlitong.ui.pu.PuPersonalCodeScreen
 import com.sdmu.guanlitong.ui.pu.PuScanScreen
@@ -101,12 +100,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private sealed interface Dest {
+    /** 首次启动引导，和普通页面一样进栈：去登录再返回时还能回到引导。 */
+    data object Onboarding : Dest
     data class Web(val serviceId: String, val startUrl: String? = null) : Dest
     data class Account(val serviceId: String) : Dest
     data class Jwxt(val page: JwxtPage = JwxtPage.Timetable) : Dest
     data class Sdgy(val page: SdgyPage = SdgyPage.Hub) : Dest
     /** 口袋校园原生页面；[activityId] 非空表示在活动列表之上叠加活动详情。 */
-    data class Pu(val page: PuPage = PuPage.Hub, val activityId: Long? = null) : Dest
+    data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(
         val title: String,
@@ -123,11 +124,12 @@ fun AppRoot(repository: AppRepository) {
     val accounts by repository.accounts.accounts.collectAsState()
 
     // 首次安装、且还没有任何已登录账号时才引导；看过或跳过就写标记，之后不再出现。
-    var showOnboarding by remember {
-        mutableStateOf(
-            OnboardingPrefs.shouldShow(context) && accounts.values.none { it.loggedIn }
-        )
+    // 引导也是一个页面，进栈后「去登录教务系统」再返回会回到它，而不是直接退出引导。
+    val startWithGuide = remember {
+        OnboardingPrefs.shouldShow(context) && accounts.values.none { it.loggedIn }
     }
+    // 引导翻到第几页也记着，登录回来时停在同一页。
+    var onboardingPage by rememberSaveable { mutableIntStateOf(0) }
 
     val jwxtSource by repository.settings.jwxtSource.collectAsState()
     val jwxtService = ServiceCatalog.byId("jwxt")!!
@@ -156,7 +158,12 @@ fun AppRoot(repository: AppRepository) {
     val featureScrollStates = remember { mutableMapOf<String, ScrollState>() }
     val featureSearchScrollState = rememberScrollState()
     val featureSdgyListState = rememberLazyListState()
-    var overlay by remember { mutableStateOf<Dest?>(null) }
+    var overlay by remember {
+        mutableStateOf<Dest?>(if (startWithGuide) Dest.Onboarding else null)
+    }
+    // 页面栈：进入新页面时把当前页压进来，返回时再弹出去，
+    // 这样详情页返回的是它上层的列表，而不是直接回主导航。
+    val destHistory = remember { mutableStateListOf<Dest>() }
     // +1 前进（页面从右侧滑入），-1 后退（页面向右滑出）。
     var pageDirection by remember { mutableIntStateOf(1) }
     var jwxtRefreshToken by remember { mutableIntStateOf(0) }
@@ -247,16 +254,18 @@ fun AppRoot(repository: AppRepository) {
         pageDirection = 1
         // 课表只有一个页面：山管侧的「我的课表」也进入教务课表页，
         // 山管数据只在课程详情里补充挂科率和上课人。
-        overlay = if (dest is Dest.Sdgy && dest.page == SdgyPage.Timetable) {
+        val next = if (dest is Dest.Sdgy && dest.page == SdgyPage.Timetable) {
             Dest.Jwxt(JwxtPage.Timetable)
         } else {
             dest
         }
+        overlay?.let { destHistory.add(it) }
+        overlay = next
     }
 
     fun goBack() {
         pageDirection = -1
-        overlay = null
+        overlay = if (destHistory.isEmpty()) null else destHistory.removeAt(destHistory.lastIndex)
     }
 
     /** 教务原生页的「用网页打开」：跟随当前数据来源。 */
@@ -339,9 +348,10 @@ fun AppRoot(repository: AppRepository) {
             targetState = overlay,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                // 前进：新页面从右滑入，旧页面轻微左移淡出；
-                // 后退：旧页面向右滑出，底层页面从左侧回位。
-                if (pageDirection >= 0) {
+                // 引导进出用淡入淡出，其余页面按前进 / 后退的方向滑动。
+                if (initialState == Dest.Onboarding || targetState == Dest.Onboarding) {
+                    fadeIn(tween(240)).togetherWith(fadeOut(tween(180)))
+                } else if (pageDirection >= 0) {
                     (slideInHorizontally(animationSpec = tween(320)) { width -> width } +
                         fadeIn(animationSpec = tween(200)))
                         .togetherWith(
@@ -447,12 +457,36 @@ fun AppRoot(repository: AppRepository) {
                                     versionName = currentVersion,
                                     updateState = updateState,
                                     onCheckUpdate = { checkForUpdate(showUpToDate = true) },
+                                    onShowOnboarding = {
+                                        onboardingPage = 0
+                                        goForward(Dest.Onboarding)
+                                    },
                                 )
                             }
                         }
                     }
                 } else {
                     when (dest) {
+                        // 引导只出现一次：跳过 / 看完 / 系统返回都算看过。
+                        is Dest.Onboarding -> OnboardingScreen(
+                            // 已经登录过教务系统的用户，第二页直接显示「下一步」。
+                            jwxtLoggedIn = accounts["jwxt"]?.loggedIn == true,
+                            initialPage = onboardingPage,
+                            onPageChange = { onboardingPage = it },
+                            onSkip = {
+                                OnboardingPrefs.markDone(context)
+                                goBack()
+                            },
+                            onAddAccount = {
+                                tab = 2
+                                goForward(Dest.Account("jwxt"))
+                            },
+                            onFinish = {
+                                OnboardingPrefs.markDone(context)
+                                goBack()
+                            },
+                        )
+
                         is Dest.Web -> {
                             val service = ServiceCatalog.byId(dest.serviceId)
                             if (service != null) {
@@ -537,11 +571,6 @@ fun AppRoot(repository: AppRepository) {
                         }
 
                         is Dest.Pu -> when (dest.page) {
-                            PuPage.Hub -> PuHubScreen(
-                                onOpen = { goForward(Dest.Pu(it)) },
-                                onOpenAccount = { goForward(Dest.Account("pu")) },
-                            )
-
                             PuPage.Activities -> if (dest.activityId != null) {
                                 PuActivityDetailScreen(
                                     activityId = dest.activityId,
@@ -700,28 +729,5 @@ fun AppRoot(repository: AppRepository) {
             },
         )
 
-        // 引导盖在最上层；跳过后直接进入应用，不再重复出现。
-        AnimatedVisibility(
-            visible = showOnboarding,
-            enter = fadeIn(tween(240)),
-            exit = fadeOut(tween(180)),
-        ) {
-            OnboardingScreen(
-                onSkip = {
-                    OnboardingPrefs.markDone(context)
-                    showOnboarding = false
-                },
-                onAddAccount = {
-                    OnboardingPrefs.markDone(context)
-                    showOnboarding = false
-                    tab = 2
-                    goForward(Dest.Account("jwxt"))
-                },
-                onFinish = {
-                    OnboardingPrefs.markDone(context)
-                    showOnboarding = false
-                },
-            )
         }
-    }
 }

@@ -82,12 +82,18 @@ fun OnboardingScreen(
     onSkip: () -> Unit,
     onAddAccount: () -> Unit,
     onFinish: () -> Unit,
+    /** 已经登录过教务系统时，第二页的按钮直接变成「下一步」。 */
+    jwxtLoggedIn: Boolean = false,
+    /** 去登录再返回时，回到上次停留的那一页。 */
+    initialPage: Int = 0,
+    onPageChange: (Int) -> Unit = {},
 ) {
     BackHandler(onBack = onSkip)
 
-    val pager = rememberPagerState(pageCount = { 3 })
+    val pager = rememberPagerState(initialPage = initialPage, pageCount = { 3 })
     val scope = rememberCoroutineScope()
     val page = pager.currentPage
+    LaunchedEffect(page) { onPageChange(page) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -141,7 +147,11 @@ fun OnboardingScreen(
                 onClick = {
                     when (page) {
                         0 -> scope.launch { pager.animateScrollToPage(1) }
-                        1 -> onAddAccount()
+                        1 -> if (jwxtLoggedIn) {
+                            scope.launch { pager.animateScrollToPage(2) }
+                        } else {
+                            onAddAccount()
+                        }
                         else -> onFinish()
                     }
                 },
@@ -154,7 +164,7 @@ fun OnboardingScreen(
                 Text(
                     text = when (page) {
                         0 -> "下一步"
-                        1 -> "去登录教务系统"
+                        1 -> if (jwxtLoggedIn) "下一步" else "去登录教务系统"
                         else -> "开始使用"
                     },
                     style = MaterialTheme.typography.titleSmall,

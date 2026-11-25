@@ -81,36 +81,19 @@ fun GrabLoginCard(
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
     if (account.loggedIn) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-            modifier = modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "抢课助手账号", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "已登录 ${account.displayName.ifBlank { "—" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        LoggedInAccountCard(
+            title = "抢课助手账号",
+            name = account.displayName,
+            onSignOut = {
+                if (grabUrl.isNotBlank()) {
+                    CookieUtils.clearFor(ApiClient.normalizeBaseUrl(grabUrl))
                 }
-                TextButton(
-                    onClick = {
-                        if (grabUrl.isNotBlank()) {
-                            CookieUtils.clearFor(ApiClient.normalizeBaseUrl(grabUrl))
-                        }
-                        store.signOut("grab", clearPassword = false)
-                        toast("已退出抢课助手")
-                        onSignedOut()
-                    },
-                ) { Text("退出登录") }
-            }
-        }
+                store.signOut("grab", clearPassword = false)
+                toast("已退出抢课助手")
+                onSignedOut()
+            },
+            modifier = modifier,
+        )
         return
     }
 

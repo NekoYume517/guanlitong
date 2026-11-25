@@ -6,7 +6,6 @@ import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreditCard
-import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ElectricalServices
 import androidx.compose.material.icons.outlined.EventNote
@@ -26,7 +25,7 @@ enum class JwxtPage { Timetable, Hub, Grades, Exams, Selection, Tasks }
 enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 
 /** 口袋校园内置的原生页面。 */
-enum class PuPage { Hub, Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
+enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
@@ -178,14 +177,6 @@ object FeatureCatalog {
             action = FeatureAction.Sdgy(SdgyPage.Shot),
         ),
 ServiceFeature(
-            id = "pu.hub",
-            serviceId = "pu",
-            title = "活动中心",
-            subtitle = "报名 · 签到 · 学时",
-            icon = Icons.Outlined.Dashboard,
-            action = FeatureAction.Pu(PuPage.Hub),
-        ),
-        ServiceFeature(
             id = "pu.activities",
             serviceId = "pu",
             title = "活动列表",

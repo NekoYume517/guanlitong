@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,11 +31,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import com.sdmu.guanlitong.data.Account
@@ -133,6 +139,21 @@ fun FeaturesScreen(
     val favoriteIds by favorites.ids.collectAsState()
     val favoriteFeatures = remember(favoriteIds, sdgyGroups) {
         favoriteIds.mapNotNull { id -> resolveFavorite(id, sdgyGroups) }
+    }
+
+    // 右上角三个点切换布局：按分类查看（默认），或把全部服务平铺成一页。
+    // 选择存在本机，下次打开还是上次那种。
+    val layoutPrefs = remember(context) {
+        context.getSharedPreferences("guanlitong_ui", Context.MODE_PRIVATE)
+    }
+    var stacked by remember {
+        mutableStateOf(layoutPrefs.getString(LAYOUT_KEY, LAYOUT_TABS) == LAYOUT_STACKED)
+    }
+    var layoutMenuOpen by remember { mutableStateOf(false) }
+    val chooseLayout: (Boolean) -> Unit = { value ->
+        stacked = value
+        layoutMenuOpen = false
+        layoutPrefs.edit().putString(LAYOUT_KEY, if (value) LAYOUT_STACKED else LAYOUT_TABS).apply()
     }
 
     // 长按胶囊弹菜单，点了「收藏 / 取消收藏」才真的改。
@@ -223,14 +244,40 @@ fun FeaturesScreen(
                 .then(if (blurMenu) Modifier.blur(12.dp) else Modifier),
         ) {
             Column(
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp),
             ) {
-                Text(
-                    text = "功能",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.padding(top = 10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "功能",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box {
+                        IconButton(onClick = { layoutMenuOpen = true }) {
+                            Icon(Icons.Outlined.MoreVert, contentDescription = "布局方式")
+                        }
+                        DropdownMenu(
+                            expanded = layoutMenuOpen,
+                            onDismissRequest = { layoutMenuOpen = false },
+                        ) {
+                            LayoutMenuItem(
+                                text = "按分类查看",
+                                selected = !stacked,
+                                onClick = { chooseLayout(false) },
+                            )
+                            LayoutMenuItem(
+                                text = "全部平铺",
+                                selected = stacked,
+                                onClick = { chooseLayout(true) },
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.padding(top = 4.dp))
                 TextField(
                     value = query,
                     onValueChange = onQueryChange,
@@ -259,7 +306,28 @@ fun FeaturesScreen(
 
             Spacer(Modifier.padding(top = 12.dp))
 
-            if (compact) {
+            if (!searching && stacked) {
+                // 全部平铺：一页里按服务分节，一级标题是服务，二级标题是官方分组。
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    StackedFeaturesPane(
+                        services = services,
+                        favoriteFeatures = favoriteFeatures,
+                        sdgyGroups = sdgyGroups,
+                        grabSource = grabSource,
+                        onOpenFeature = onOpenFeature,
+                        onOpenMenuFor = openMenuFor,
+                        scrollState = scrollStates.getOrPut(LAYOUT_STACKED) { ScrollState(0) },
+                        modifier = (if (compact) {
+                            Modifier.fillMaxWidth()
+                        } else {
+                            Modifier.widthIn(max = 760.dp).fillMaxWidth()
+                        }).fillMaxHeight(),
+                    )
+                }
+            } else if (compact) {
                 // 搜索时只留搜索结果，分类 tab 不占位置。
                 if (!searching) {
                     ServiceChipBar(
@@ -451,6 +519,87 @@ private fun ServiceChipBar(
             }
         }
     }
+}
+
+/** 右上角布局菜单的一项，当前生效的那项带勾。 */
+@Composable
+private fun LayoutMenuItem(text: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text) },
+        trailingIcon = {
+            if (selected) Icon(Icons.Outlined.Check, contentDescription = "当前布局")
+        },
+        onClick = onClick,
+    )
+}
+
+/**
+ * 「全部平铺」布局：所有服务排在同一页里。
+ * 一级标题是服务名，二级标题是山管官方分组；有收藏时收藏排在最前面。
+ */
+@Composable
+private fun StackedFeaturesPane(
+    services: List<SchoolService>,
+    favoriteFeatures: List<ServiceFeature>,
+    sdgyGroups: List<SdgyAppGroup>,
+    grabSource: Boolean,
+    onOpenFeature: (ServiceFeature) -> Unit,
+    onOpenMenuFor: (ServiceFeature, Rect) -> Unit,
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(scrollState)
+            .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 120.dp),
+    ) {
+        if (favoriteFeatures.isNotEmpty()) {
+            StackedSectionTitle("收藏")
+            FeatureChipRows(favoriteFeatures, onOpenFeature, onOpenMenuFor)
+        }
+
+        services.filter { it.id != FAVORITES_ID }.forEach { service ->
+            if (service.id == "sdgy") {
+                StackedSectionTitle(service.name)
+                sdgyGroups.forEach { group ->
+                    if (group.apps.isEmpty()) return@forEach
+                    StackedGroupTitle(group.name)
+                    FeatureChipRows(
+                        features = group.apps.map { FeatureCatalog.sdgyApp(it) },
+                        onOpenFeature = onOpenFeature,
+                        onLongPress = onOpenMenuFor,
+                    )
+                }
+            } else {
+                val features = FeatureCatalog.forService(service.id)
+                    .filter { grabSource || !it.grabSourceOnly }
+                if (features.isEmpty()) return@forEach
+                StackedSectionTitle(service.name)
+                FeatureChipRows(features, onOpenFeature, onOpenMenuFor)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StackedSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 18.dp, bottom = 10.dp),
+    )
+}
+
+@Composable
+private fun StackedGroupTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+    )
 }
 
 @Composable
@@ -818,6 +967,11 @@ private fun ChipBody(feature: ServiceFeature, accent: Color) {
 
 /** 「收藏」只是功能页里的一个分类，不是需要登录的服务，所以不进 [ServiceCatalog]。 */
 private const val FAVORITES_ID = "favorites"
+
+/** 布局偏好的存储：按分类查看（默认）或全部平铺。 */
+private const val LAYOUT_KEY = "feature_layout"
+private const val LAYOUT_TABS = "tabs"
+private const val LAYOUT_STACKED = "stacked"
 
 /** 正被长按的功能，以及它在窗口里的位置。 */
 private data class LongPressTarget(
