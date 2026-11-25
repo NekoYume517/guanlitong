@@ -86,7 +86,7 @@ internal fun QuickActionsContent(
                         alpha = if (menuTargetIndex == index) 0f else 1f
                     }
                     .clip(shape)
-                    .pointerInput(widgetId, index) {
+                    .pointerInput(widgetId, feature.id, index) {
                         detectTapGestures(
                             onTap = { onOpenFeature(feature) },
                             onLongPress = { offset ->
@@ -102,12 +102,19 @@ internal fun QuickActionsContent(
 
         when (size) {
             WidgetSize.Small -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                features.chunked(2).forEachIndexed { rowIndex, row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEachIndexed { columnIndex, feature ->
-                            Entry(rowIndex * 2 + columnIndex, feature, Modifier.weight(1f))
+                if (features.size == 2) {
+                    // 两个入口在半宽格子里标题会被截断，小卡片改成上下两行整行显示。
+                    features.forEachIndexed { index, feature ->
+                        Entry(index, feature, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    features.chunked(2).forEachIndexed { rowIndex, row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEachIndexed { columnIndex, feature ->
+                                Entry(rowIndex * 2 + columnIndex, feature, Modifier.weight(1f))
+                            }
+                            repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
-                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }

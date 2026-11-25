@@ -305,7 +305,7 @@ class JwxtClient(
         } catch (e: JwxtException) {
             throw e
         } catch (e: IOException) {
-            throw JwxtException("无法连接教务系统：${e.message ?: "网络错误"}")
+            throw JwxtException("无法连接教务系统，请检查网络后重试")
         } finally {
             connection.disconnect()
         }

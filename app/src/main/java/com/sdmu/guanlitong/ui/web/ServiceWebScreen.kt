@@ -129,13 +129,8 @@ fun ServiceWebScreen(
                     modifier = Modifier.padding(32.dp),
                 ) {
                     Text(
-                        text = "还没有配置 ${service.name} 的地址",
+                        text = "${service.name}暂时不可用",
                         style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = "请到「我的 → 应用设置 → 服务地址」中填写后重试。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     TextButton(onClick = onBack) { Text("返回") }
                 }

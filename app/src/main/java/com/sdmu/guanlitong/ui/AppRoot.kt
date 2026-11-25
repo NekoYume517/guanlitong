@@ -155,11 +155,9 @@ fun AppRoot(repository: AppRepository) {
             UpdatePrefs.markChecked(context)
             val info = result.getOrNull()
             updateState = when {
-                result.isFailure -> UpdateState.Failed(
-                    result.exceptionOrNull()?.message ?: "无法连接 GitHub",
-                )
+                result.isFailure -> UpdateState.Failed("请检查网络后重试")
 
-                info == null -> UpdateState.Failed("GitHub 上还没有带安装包的 Release")
+                info == null -> UpdateState.Failed("暂时没有可安装的新版本")
                 UpdateClient.isNewer(info.version, currentVersion) -> UpdateState.Available(info)
                 showUpToDate -> UpdateState.UpToDate
                 else -> UpdateState.Idle
@@ -187,7 +185,7 @@ fun AppRoot(repository: AppRepository) {
                 if (!needsPermission) UpdateClient.install(context, apk)
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) throw t
-                updateState = UpdateState.Failed(t.message ?: "下载失败")
+                updateState = UpdateState.Failed("请检查网络后重试", downloadFailure = true)
             }
         }
     }
@@ -366,7 +364,6 @@ fun AppRoot(repository: AppRepository) {
                                     onOpenFeature = { openFeature(it) },
                                     onOpenTimetable = { goForward(Dest.Jwxt(JwxtPage.Timetable)) },
                                     onOpenAccount = { goForward(Dest.Account(it.id)) },
-                                    onOpenFeatures = { tab = 1 },
                                     onOpenMine = { tab = 2 },
                                     jwxtSource = jwxtSource,
                                     scrollState = overviewScrollState,
@@ -607,6 +604,7 @@ fun AppRoot(repository: AppRepository) {
                                     refreshToken = jwxtRefreshToken,
                                     onBack = { goBack() },
                                     onOpenWeb = { openJwxtWeb(false) },
+                                    onOpenSelection = { goForward(Dest.Jwxt(JwxtPage.Selection)) },
                                     grabLoginContent = {
                                         GrabLoginCard(
                                             grabUrl = grabUrl,

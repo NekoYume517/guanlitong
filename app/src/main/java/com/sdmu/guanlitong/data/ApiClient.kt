@@ -46,7 +46,7 @@ object ApiClient {
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 val ok = code in 200..299 && json?.optBoolean("success", false) == true
                 val message = json?.optString("message").orEmpty().ifBlank {
-                    if (ok) "登录成功" else "登录失败（HTTP $code）"
+                    if (ok) "登录成功" else "登录失败，请检查账号、密码或稍后重试"
                 }
                 LoginResult(
                     success = ok,
@@ -56,7 +56,7 @@ object ApiClient {
             } catch (t: Throwable) {
                 LoginResult(
                     success = false,
-                    message = "无法连接服务：${t.message ?: t.javaClass.simpleName}",
+                    message = "无法连接服务，请检查网络后重试",
                 )
             } finally {
                 conn?.disconnect()

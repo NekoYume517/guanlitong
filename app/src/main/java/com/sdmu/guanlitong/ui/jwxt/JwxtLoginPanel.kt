@@ -118,7 +118,7 @@ fun JwxtLoginPanel(
             captcha = bitmap?.asImageBitmap()
             captchaLoading = false
             if (bitmap == null) {
-                hint = "验证码图片解析失败，请点击刷新"
+                hint = "验证码加载失败"
                 return@LaunchedEffect
             }
 
@@ -128,12 +128,12 @@ fun JwxtLoginPanel(
                 code = recognized.lowercase()
                 hint = "已自动识别：$recognized（可修改）"
             } else if (recognized.isBlank()) {
-                hint = "未能自动识别，请手动输入图片中的验证码"
+                hint = "没识别出来，请输入图片中的验证码"
             } else {
                 hint = "识别结果「$recognized」不完整，请手动输入验证码"
             }
         } catch (e: Exception) {
-            message = e.message ?: "获取验证码失败"
+            message = "获取验证码失败，请检查网络后重试"
             isError = true
         } finally {
             captchaLoading = false
@@ -171,7 +171,7 @@ fun JwxtLoginPanel(
                     captchaNonce++
                 }
             } catch (e: Exception) {
-                message = e.message ?: "登录失败"
+                message = "登录失败，请稍后重试"
                 isError = true
             } finally {
                 loggingIn = false
@@ -184,7 +184,7 @@ fun JwxtLoginPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "验证码会自动识别，识别不准可以直接改。登录成功后，原生课表与内嵌网页共用这份登录态。",
+            text = "验证码会自动识别，识别不准可以直接改。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -315,7 +315,7 @@ fun JwxtLoginPanel(
                 )
                 Spacer(Modifier.width(10.dp))
             }
-            Text(if (loggingIn) "正在登录…" else "登录教务系统")
+            Text("登录教务系统")
         }
 
         if (onOpenWeb != null) {

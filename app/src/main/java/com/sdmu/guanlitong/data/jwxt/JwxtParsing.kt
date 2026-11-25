@@ -135,7 +135,11 @@ internal fun teacherName(raw: String): String {
 
 // ── 课表（kbcx 原始数据） ───────────────────────────────────
 
-internal fun parseKbcxCourses(root: JSONObject): List<Course> {
+internal fun parseKbcxCourses(
+    root: JSONObject,
+    /** 抢课助手会额外返回压缩好的 zcd_desc，优先使用。 */
+    useProvidedWeekDesc: Boolean = false,
+): List<Course> {
     val array = root.optJSONArray("kbList") ?: return emptyList()
     val courses = mutableListOf<Course>()
     for (i in 0 until array.length()) {
@@ -153,7 +157,14 @@ internal fun parseKbcxCourses(root: JSONObject): List<Course> {
         val periodRange = parsePeriodRange(rawPeriod)
         val rawWeeks = item.str("zcd").ifBlank { item.str("qsjsz") }
         val weeks = ZcdParser.parse(rawWeeks)
-        val weeksDesc = ZcdParser.describe(weeks)
+        // 官方教务的 zcd 可能带“周 / 单双”，这里统一压缩；
+        // 抢课助手的 zcd 已是纯逗号列表，并附带压缩好的 zcd_desc。
+        val providedDesc = item.str("zcd_desc")
+        val weeksDesc = if (useProvidedWeekDesc && providedDesc.isNotBlank()) {
+            providedDesc
+        } else {
+            ZcdParser.describe(weeks)
+        }
 
         courses += Course(
             name = name,

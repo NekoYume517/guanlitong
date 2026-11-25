@@ -48,7 +48,7 @@ class GrabApiClient(
         val root = checkSuccess(request(query))
         val data = root.optJSONObject("data")
             ?: throw JwxtException("抢课助手没有返回课表数据")
-        val courses = parseKbcxCourses(data)
+        val courses = parseKbcxCourses(data, useProvidedWeekDesc = true)
         val jcTimes = runCatching { fetchJcTimes(xnm, xqm) }.getOrDefault(emptyMap())
         val student = data.optJSONObject("xsxx")
 
@@ -303,7 +303,7 @@ class GrabApiClient(
         } catch (e: JwxtException) {
             throw e
         } catch (e: IOException) {
-            throw JwxtException("无法连接抢课助手：${e.message ?: "网络错误"}")
+            throw JwxtException("无法连接抢课助手，请检查网络后重试")
         } finally {
             connection.disconnect()
         }

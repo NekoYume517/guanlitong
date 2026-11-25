@@ -65,22 +65,21 @@ fun DesktopWidgetPreview(
             Spacer(Modifier.height(if (size == DesktopSize.Small) 5.dp else 9.dp))
             if (type == WidgetType.NextClass) NextPreview(state, size) else GenericPreview(state)
             Spacer(Modifier.height(if (size == DesktopSize.Small) 5.dp else 9.dp))
+            val nextClassUpdate = if (type == WidgetType.NextClass) {
+                state.nextClass.savedAt.takeIf { it > 0 }?.let {
+                    " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
+                }.orEmpty()
+            } else ""
             Text(
                 text = when {
-                    type == WidgetType.NextClass && !state.nextClass.hasTimetable -> "尚无课表缓存"
-                    type == WidgetType.NextClass && state.nextClass.sessionLost -> "登录失效 · 使用缓存"
-                    type == WidgetType.NextClass -> "使用缓存" +
-                        state.nextClass.savedAt.takeIf { it > 0 }?.let {
-                            " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
-                        }.orEmpty()
+                    type == WidgetType.NextClass && !state.nextClass.hasTimetable -> "长按编辑"
+                    type == WidgetType.NextClass && state.nextClass.sessionLost -> "未登录，显示上次课表$nextClassUpdate"
+                    type == WidgetType.NextClass && nextClassUpdate.isNotEmpty() -> nextClassUpdate.removePrefix(" · ")
+                    type == WidgetType.NextClass -> "显示上次课表"
                     else -> "桌面卡片 · 长按编辑"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = if (type == WidgetType.NextClass && state.nextClass.sessionLost) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

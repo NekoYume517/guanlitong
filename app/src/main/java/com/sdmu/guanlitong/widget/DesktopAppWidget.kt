@@ -83,6 +83,7 @@ private fun DesktopContent(state: DesktopState) {
     Column(
         modifier = GlanceModifier.fillMaxSize()
             .background(GlanceTheme.colors.surface)
+            .clickable(onClick = actionStartActivity<MainActivity>())
             .padding(if (state.size == DesktopSize.Small) 12.dp else 16.dp)
             .cornerRadius(24.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -97,7 +98,6 @@ private fun DesktopContent(state: DesktopState) {
                     fontWeight = FontWeight.Medium,
                 ),
                 maxLines = 1,
-                modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()),
             )
         }
         Spacer(GlanceModifier.height(6.dp))
@@ -185,14 +185,20 @@ private fun NextClassDesktop(state: DesktopState) {
             }
         }
     }
+    val updateLabel = snapshot.savedAt.takeIf { it > 0 }?.let {
+        " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
+    }.orEmpty()
+    val statusLabel = when {
+        !snapshot.hasTimetable -> ""
+        snapshot.sessionLost -> "未登录，显示上次课表$updateLabel"
+        updateLabel.isNotEmpty() -> updateLabel.removePrefix(" · ")
+        else -> "显示上次课表"
+    }
     Spacer(GlanceModifier.height(6.dp))
     Text(
-        text = (if (snapshot.sessionLost) "登录失效 · " else "") + "使用缓存" +
-            (snapshot.savedAt.takeIf { it > 0 }?.let {
-                " · ${SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(it))} 更新"
-            } ?: "") + " · 长按编辑",
+        text = if (statusLabel.isEmpty()) "长按编辑" else "$statusLabel · 长按编辑",
         style = TextStyle(
-            color = if (snapshot.sessionLost) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant,
+            color = GlanceTheme.colors.onSurfaceVariant,
             fontSize = 10.sp,
         ),
         maxLines = 1,

@@ -19,8 +19,20 @@ data class SdgyCourseSupplement(
     val highest: String,
     val studentCount: String,
     val genderRatio: String,
-    /** 姓名 → 学号。 */
-    val classmates: List<Pair<String, String>>,
+    /** 最高分不及格人数；接口没给时为空。 */
+    val maxFailCount: String,
+    /** 本课程当前最高分，最高分名单里所有人都是这个分数。 */
+    val topScore: String,
+    val classmates: List<SdgyClassmate>,
+    val topScorers: List<SdgyClassmate>,
+)
+
+/** 上课人名单：山管返回姓名、性别、班级和学号，不要把后两项丢掉。 */
+data class SdgyClassmate(
+    val name: String,
+    val studentId: String,
+    val sex: String,
+    val className: String,
 )
 
 /**
@@ -93,23 +105,51 @@ object SdgyTimetableSource {
         val classmates = runCatching {
             repository.call { client -> client.classmates(detail) }
         }.getOrDefault(JSONArray())
+        val topScorers = if (text(detail, "zgfzscj").isNotBlank()) {
+            runCatching { repository.call { client -> client.topScorers(detail) } }
+                .getOrDefault(JSONArray())
+        } else {
+            JSONArray()
+        }
 
         return SdgyCourseSupplement(
             failureRate = text(detail, "gkl").ifBlank { "--" },
             average = text(detail, "pjf").ifBlank { "--" },
             highest = text(detail, "lszgf").ifBlank { "--" },
             studentCount = text(detail, "skrs").ifBlank { "--" },
-            genderRatio = listOf(text(detail, "nansbl"), text(detail, "nvsbl"))
-                .filter { it.isNotBlank() }
-                .joinToString(" : ")
-                .ifBlank { "--" },
-            classmates = (0 until classmates.length()).mapNotNull { index ->
-                val o = classmates.optJSONObject(index) ?: return@mapNotNull null
-                val name = text(o, "xm")
-                if (name.isBlank()) null else name to text(o, "xh")
+            genderRatio = run {
+                val male = text(detail, "nansbl")
+                val female = text(detail, "nvsbl")
+                when {
+                    male.isNotBlank() && female.isNotBlank() -> "$male/$female"
+                    male.isNotBlank() -> male
+                    female.isNotBlank() -> female
+                    else -> "--"
+                }
             },
+            // 官方 App 对缺失字段按 0 人显示，保持一致。
+            maxFailCount = text(detail, "zgfbczrs").ifBlank { "0" },
+            topScore = text(detail, "zgfzscj"),
+            classmates = parseClassmates(classmates),
+            topScorers = parseClassmates(topScorers),
         )
     }
+
+    private fun parseClassmates(array: JSONArray): List<SdgyClassmate> =
+        (0 until array.length()).mapNotNull { index ->
+            val o = array.optJSONObject(index) ?: return@mapNotNull null
+            val name = text(o, "xm")
+            if (name.isBlank()) {
+                null
+            } else {
+                SdgyClassmate(
+                    name = name,
+                    studentId = text(o, "xh"),
+                    sex = text(o, "xb"),
+                    className = text(o, "bjmc"),
+                )
+            }
+        }
 
     /**
      * 未登录教务系统时的兜底：把山管全学期课表转换成统一课表页使用的模型。

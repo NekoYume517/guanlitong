@@ -39,8 +39,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import com.sdmu.guanlitong.data.sdgy.SdgyException
+import com.sdmu.guanlitong.data.sdgy.SdgyPasswordResetException
 import com.sdmu.guanlitong.data.sdgy.SdgyRepository
 import kotlinx.coroutines.CancellationException
+import org.json.JSONException
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 /** 山管二级页统一的外壳：标题 + 返回 + 可选右上角操作。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,10 +160,25 @@ fun rememberPermissionRequester(onResult: (Boolean) -> Unit): (String) -> Unit {
 fun Context.hasPermission(permission: String): Boolean =
     ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
-/** 页面异步任务里的错误文案。 */
-fun Throwable.sdgyMessage(): String = when (this) {
-    is CancellationException -> ""
-    else -> message?.takeIf { it.isNotBlank() } ?: javaClass.simpleName
+/** 页面异步任务里的错误文案：保留业务原因，不把异常类名或协议细节交给用户。 */
+fun Throwable.sdgyMessage(): String = when {
+    this is CancellationException -> ""
+    this is SdgyPasswordResetException -> "请先在官方山管 App 重置密码"
+    this is SdgyException && sessionLost -> "山管 App 登录已失效，请重新登录"
+    this is SdgyException && code == "not_login" -> "请先到「我的 → 山管 App」登录"
+    this is SdgyException && (
+        message.orEmpty().contains("HTTP") ||
+            message.orEmpty().contains("握手") ||
+            message.orEmpty().contains("无法识别") ||
+            message.orEmpty().contains("缺少会话")
+        ) -> "服务器暂时无法连接，请稍后重试"
+    this is SdgyException -> message?.takeIf { it.isNotBlank() } ?: "操作失败，请稍后重试"
+    this is UnknownHostException || this is ConnectException -> "网络连接失败，请检查网络后重试"
+    this is SocketTimeoutException -> "连接超时，请检查网络后重试"
+    this is SSLException -> "安全连接失败，请检查网络或稍后重试"
+    this is JSONException -> "数据暂时无法读取，请稍后重试"
+    this is IOException -> "网络连接失败，请检查网络后重试"
+    else -> "操作失败，请稍后重试"
 }
 
 @Composable

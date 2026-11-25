@@ -90,9 +90,6 @@ import com.sdmu.guanlitong.ui.components.FlowChipRow
 import com.sdmu.guanlitong.ui.components.rememberRemoteIcon
 import java.net.HttpURLConnection
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,7 +110,7 @@ fun SdgyHubScreen(
     modifier: Modifier = Modifier,
 ) {
     SdgyScaffold(
-        title = "山管app",
+        title = "山管 App",
         onBack = onBack,
         modifier = modifier,
     ) { padding ->
@@ -161,14 +158,6 @@ fun SdgyAppsContent(
     var groups by remember {
         mutableStateOf(cached?.groups ?: SdgyAppCatalog.fallback())
     }
-    var listSource by remember {
-        mutableStateOf(
-            when {
-                cached != null -> "缓存 ${timeText(cached.savedAt)}"
-                else -> "内置清单"
-            },
-        )
-    }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
@@ -184,7 +173,6 @@ fun SdgyAppsContent(
             if (parsed.isNotEmpty()) {
                 groups = parsed
                 SdgyAppsStore.save(context, list.toString())
-                listSource = "已同步 ${timeText(System.currentTimeMillis())}"
                 error = null
             } else {
                 error = "服务器没有返回功能列表"
@@ -228,11 +216,11 @@ fun SdgyAppsContent(
             return
         }
         if (entry.lx == "1" || entry.url.startsWith("native_")) {
-            toast(context, "官方原生页面「${entry.name}」暂未内置")
+            toast(context, "这个功能暂时不能在管院通里打开")
             return
         }
         if (!loggedIn) {
-            toast(context, "请先登录山管app")
+            toast(context, "请先登录山管 App")
             onOpenAccount()
             return
         }
@@ -268,14 +256,9 @@ fun SdgyAppsContent(
                 item {
                     Row(
                         Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "全部功能",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
                         IconButton(
                             onClick = { refreshToken++ },
                             enabled = loggedIn && !refreshing,
@@ -293,17 +276,17 @@ fun SdgyAppsContent(
                 item {
                     ErrorCard(
                         message = error.orEmpty(),
-                        source = listSource,
+                        source = if (cached != null) "上次同步的功能列表" else "常用功能",
                         onRetry = { refreshToken++ },
                     )
                 }
             }
             if (query.isNotBlank()) {
-                item { SectionTitle("搜索结果 · ${shownGroups.sumOf { it.apps.size }}") }
+                item { SectionTitle("搜索结果") }
                 if (shownGroups.isEmpty()) {
                     item {
                         Text(
-                            "没有找到「$query」相关的功能",
+                            "没有找到「$query」",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -343,15 +326,6 @@ fun SdgyAppsContent(
                     }
                 }
             }
-            item {
-                Text(
-                    "共 ${groups.sumOf { it.apps.size }} 个功能 · $listSource",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
     }
 }
@@ -390,7 +364,7 @@ private fun AccountCard(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (loggedIn) name.ifBlank { "已登录" } else "尚未登录山管app",
+                    if (loggedIn) name.ifBlank { "已登录" } else "尚未登录山管 App",
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -460,12 +434,12 @@ private fun ErrorCard(message: String, source: String, onRetry: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "无法刷新官方功能列表：$message",
+                    "功能列表刷新失败：$message",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Text(
-                    "当前显示$source，仍可正常使用原生工具。",
+                    "当前显示$source。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                 )
@@ -635,10 +609,6 @@ private fun SdgyPage.icon(): ImageVector = when (this) {
     SdgyPage.Xbc -> Icons.Outlined.ElectricBike
     SdgyPage.Hub -> Icons.Outlined.Search
 }
-
-private fun timeText(timestamp: Long): String =
-    if (timestamp <= 0L) "未知" else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-        .format(Date(timestamp))
 
 private fun toast(context: Context, text: String) {
     Toast.makeText(context, text, Toast.LENGTH_SHORT).show()

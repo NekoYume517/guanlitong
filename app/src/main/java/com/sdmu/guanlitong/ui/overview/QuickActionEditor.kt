@@ -64,6 +64,7 @@ import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.sdgy.SdgyAppGroup
 import androidx.compose.runtime.key
+import kotlinx.coroutines.delay
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableRow
@@ -88,8 +89,8 @@ private fun ServiceFeature.availableFor(loggedIn: Set<String>): Boolean = when {
 @Composable
 fun QuickActionEditorSheet(
     store: QuickActionStore,
+    widgetId: String,
     focusId: String?,
-    focusIndex: Int?,
     selectedFeatures: List<ServiceFeature>,
     sdgyGroups: List<SdgyAppGroup>,
     /** 已登录的服务 ID；候选区只展示已登录服务的入口。 */
@@ -97,12 +98,17 @@ fun QuickActionEditorSheet(
     onRefreshSdgy: suspend () -> List<SdgyAppGroup>,
     onDismiss: () -> Unit,
 ) {
-    val storedIds by store.featureIds.collectAsState()
+    val idsByWidget by store.idsByWidget.collectAsState()
+    val storedIds = idsByWidget[widgetId] ?: store.featureIds(widgetId)
     val context = androidx.compose.ui.platform.LocalContext.current
     val cachedGroups = remember { com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.load(context)?.groups.orEmpty() }
     val availableGroups = sdgyGroups.ifEmpty { cachedGroups }
-    var ids by remember { mutableStateOf(storedIds) }
+    var ids by remember(widgetId) { mutableStateOf(storedIds) }
     var isReordering by remember { mutableStateOf(false) }
+    // 拖拽松手后排序库还要播放让位动画，onSettle 在动画结束才回调；
+    // 这段时间点「完成」不能直接把编辑页关掉，否则排序会丢。
+    var awaitingSettle by remember(widgetId) { mutableStateOf(false) }
+    var pendingDismiss by remember(widgetId) { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
     val features = ids.mapNotNull { id ->
@@ -130,10 +136,16 @@ fun QuickActionEditorSheet(
         }
     }
 
-    LaunchedEffect(storedIds) { ids = storedIds }
+    LaunchedEffect(widgetId, storedIds) { ids = storedIds }
+    LaunchedEffect(pendingDismiss, awaitingSettle) {
+        if (!pendingDismiss) return@LaunchedEffect
+        // onSettle 会把 awaitingSettle 置回 false 并重启本效果；最多等 800ms 兜底。
+        if (awaitingSettle) delay(800)
+        onDismiss()
+    }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isReordering) pendingDismiss = true },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
@@ -153,18 +165,13 @@ fun QuickActionEditorSheet(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(
-                        "长按拖动排序，点击 − 移除",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
                 Text(
                     "${features.size}/$MAX_ACTIONS",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = onDismiss) { Text("完成") }
+                TextButton(onClick = { if (!isReordering) pendingDismiss = true }) { Text("完成") }
             }
 
             Spacer(Modifier.height(18.dp))
@@ -172,7 +179,7 @@ fun QuickActionEditorSheet(
                 Box(
                     modifier = Modifier.fillMaxWidth().height(72.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("从下方添加一个功能") }
+                ) { Text("添加快捷功能") }
             } else {
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
                     // ReorderableItem 是自定义子 Layout，weight 不会传给外层 Row，必须显式给槽宽。
@@ -181,8 +188,20 @@ fun QuickActionEditorSheet(
                     ReorderableRow(
                         list = features,
                         onSettle = { from, to ->
-                            ids = ids.toMutableList().apply { add(to, removeAt(from)) }
-                            store.reorder(from, to)
+                            // features 会过滤掉暂未解析的山管入口，不能把它的索引直接
+                            // 套到完整 ids 上；按功能 ID 找到真实位置再移动。
+                            val movingId = features.getOrNull(from)?.id
+                            val targetId = features.getOrNull(to)?.id
+                            val fromIndex = movingId?.let(ids::indexOf) ?: -1
+                            val toIndex = targetId?.let(ids::indexOf) ?: -1
+                            if (fromIndex >= 0 && toIndex >= 0) {
+                                val next = ids.toMutableList().apply {
+                                    add(toIndex, removeAt(fromIndex))
+                                }
+                                ids = next
+                                store.setOrder(widgetId, next)
+                            }
+                            awaitingSettle = false
                         },
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(gap),
@@ -201,13 +220,18 @@ fun QuickActionEditorSheet(
                                             },
                                             onDragStarted = {
                                                 isReordering = true
+                                                awaitingSettle = false
+                                                pendingDismiss = false
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                             },
-                                            onDragStopped = { isReordering = false },
+                                            onDragStopped = {
+                                                isReordering = false
+                                                awaitingSettle = true
+                                            },
                                         ),
                                     onRemove = {
                                         ids = ids - feature.id
-                                        store.remove(feature.id)
+                                        store.remove(widgetId, feature.id)
                                     },
                                 )
                             }
@@ -220,7 +244,7 @@ fun QuickActionEditorSheet(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                placeholder = { Text("搜索功能、来源或分组") },
+                placeholder = { Text("搜索功能") },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 trailingIcon = if (query.isNotEmpty()) {
                     { IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "清空搜索") } }
@@ -294,21 +318,22 @@ fun QuickActionEditorSheet(
                                 selected = candidate.id in ids,
                                 canAdd = ids.size < MAX_ACTIONS,
                                 onClick = {
-                                    val replaceIndex = focusIndex?.takeIf { it in ids.indices }
+                                    // 焦点绑定稳定的功能 ID，不绑定列表位置；移除或排序后不能误改另一个入口。
+                                    val replaceIndex = focusId?.let { ids.indexOf(it) }?.takeIf { it >= 0 }
                                     if (replaceIndex != null) {
                                         if (candidate.id == ids[replaceIndex]) {
                                             // 点击当前入口只是关闭焦点，不改变绑定。
                                         } else if (candidate.id !in ids) {
                                             val previousId = ids[replaceIndex]
                                             ids = ids.toMutableList().apply { this[replaceIndex] = candidate.id }
-                                            store.replace(previousId, candidate.id)
+                                            store.replace(widgetId, previousId, candidate.id)
                                         }
                                     } else if (candidate.id in ids) {
                                         ids = ids - candidate.id
-                                        store.remove(candidate.id)
+                                        store.remove(widgetId, candidate.id)
                                     } else if (ids.size < MAX_ACTIONS) {
                                         ids = ids + candidate.id
-                                        store.add(candidate.id)
+                                        store.add(widgetId, candidate.id)
                                     }
                                 },
                             )

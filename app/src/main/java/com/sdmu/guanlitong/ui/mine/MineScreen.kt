@@ -122,8 +122,8 @@ fun MineScreen(
         item {
             SettingsRow(
                 icon = Icons.Outlined.DeleteOutline,
-                title = "清除所有登录状态",
-                subtitle = "退出全部账号并清空网页 Cookie",
+                title = "退出全部账号",
+                subtitle = "退出账号并删除登录信息、课表缓存",
                 destructive = true,
                 onClick = { showClearDialog = true },
             )
@@ -143,15 +143,15 @@ fun MineScreen(
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("清除所有登录状态？") },
-            text = { Text("所有服务的账号记录和网页登录状态都会被清除，需要重新登录。") },
+            title = { Text("退出全部账号？") },
+            text = { Text("教务系统和山管 App 的账号、密码、网页登录状态和课表缓存都会被删除，需要重新登录。") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showClearDialog = false
                         onClearAll()
                     },
-                ) { Text("清除") }
+                ) { Text("退出并清除") }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) { Text("取消") }
@@ -165,7 +165,7 @@ fun MineScreen(
             title = { Text("关于管院通") },
             text = {
                 Text(
-                    "把学校散落的教务、门户、图书馆和第三方应用收进一个 App。\n\n" +
+                    "查课表、成绩、考试和选课，管理教务与山管 App 账号。\n\n" +
                         "账号由你在「我的」里自行管理，App 默认不强制登录。\n\n" +
                         "本应用为非官方工具，与山东管理学院官方无关。",
                 )

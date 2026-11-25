@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,7 +97,7 @@ fun SdgyPayScreen(
 
     suspend fun refreshCode() {
         if (studentId.isBlank()) {
-            ui = ui.copy(firstLoad = false, error = "尚未登录山管app，无法获取一卡通信息。")
+            ui = ui.copy(firstLoad = false, error = "尚未登录山管 App，无法获取一卡通信息。")
             return
         }
         // 后续刷新保留旧二维码和余额，不清空已显示页面。
@@ -113,7 +114,7 @@ fun SdgyPayScreen(
                 if (card.isBlank()) {
                     return@withContext ui.copy(
                         firstLoad = false, refreshing = false,
-                        error = "获取一卡通卡号失败：${SdgyPayApi.lastDebug}",
+                        error = "暂时读不到一卡通卡号",
                     )
                 }
                 val wallet = SdgyPayApi.wallet(card)
@@ -121,7 +122,7 @@ fun SdgyPayScreen(
                 if (qr.isNullOrBlank()) {
                     return@withContext ui.copy(
                         firstLoad = false, refreshing = false,
-                        error = "获取付款码失败：${SdgyPayApi.lastDebug}",
+                        error = "暂时读不到付款码，请重试",
                     )
                 }
                 PayUi(
@@ -229,7 +230,7 @@ fun SdgyPayScreen(
                         }
                     }
                     TextButton(onClick = { balanceReload++ }, enabled = !ui.balanceRefreshing) {
-                        Text(if (ui.balanceRefreshing) "刷新中…" else "刷新")
+                        Text("刷新")
                     }
                 }
             }
@@ -250,7 +251,7 @@ fun SdgyPayScreen(
                         Spacer(Modifier.height(10.dp))
                         TextButton(onClick = {
                             if (studentId.isBlank()) onOpenAccount() else reload++
-                        }) { Text(if (studentId.isBlank()) "去登录山管app" else "重试") }
+                        }) { Text(if (studentId.isBlank()) "去登录山管 App" else "重试") }
                     }
                 }
                 else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -282,7 +283,7 @@ fun SdgyPayScreen(
                     ui.error?.let {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "刷新失败，当前码仍可用：$it",
+                            "刷新失败，当前码仍可用",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
@@ -296,7 +297,7 @@ fun SdgyPayScreen(
                         shape = RoundedCornerShape(12.dp),
                     ) {
                         Text(
-                            if (ui.refreshing) "正在更新…" else "立即刷新付款码",
+                            "立即刷新付款码",
                             style = MaterialTheme.typography.titleSmall,
                         )
                     }
@@ -318,7 +319,7 @@ fun SdgyPayScreen(
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    if (ui.wallets.isEmpty()) Text("暂无数据")
+                    if (ui.wallets.isEmpty()) Text("暂无其他钱包余额")
                 }
             },
             confirmButton = { TextButton(onClick = { showWallets = false }) { Text("关闭") } },
@@ -375,7 +376,12 @@ private fun PaySuccess(state: SdgyPayApi.PayState, onContinue: () -> Unit) {
                 .background(MaterialTheme.colorScheme.primaryContainer),
             Alignment.Center,
         ) {
-            Text("✓", fontSize = 42.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Icon(
+                Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(42.dp),
+            )
         }
         Spacer(Modifier.height(14.dp))
         Text("支付成功", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)

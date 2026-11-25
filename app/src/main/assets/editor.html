@@ -178,8 +178,12 @@
     padding: 7px 11px; font-size: 13px; cursor: pointer; white-space: nowrap;
   }
   .editor-ui button:active { background: #555; }
+  .editor-ui button:disabled, .export-mask button:disabled { opacity: .55; cursor: default; }
   .editor-ui button.primary { background: #0A84FF; }
   .editor-ui button.on { background: #30D158; color: #062d12; font-weight: 600; }
+  .action-status { font-size: 12px; color: #ddd; }
+  .action-status:empty { display: none; }
+  .editor-ui .action-status { color: #b9b9be; }
 
   /* ── 导出预览 ── */
   .export-mask {
@@ -191,7 +195,7 @@
     max-width: min(92vw, 460px); max-height: 66vh; background: #fff;
     box-shadow: 0 10px 40px rgba(0,0,0,.5); border-radius: 4px;
   }
-  .export-mask .btns { display: flex; gap: 10px; }
+  .export-mask .btns { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
   .export-mask button {
     border: 0; border-radius: 9px; padding: 10px 18px; font-size: 14px; cursor: pointer;
   }
@@ -330,10 +334,10 @@ body.pb-rolling .app{padding-top:94px}
       <div class="section-bar"><i class="accent"></i><span class="bar-t" contenteditable="true" spellcheck="false">基本信息</span></div>
 
       <div class="row"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">学号</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">张三</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">所在学院</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">信息工程学院</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">班级</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">25计科2</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">联系方式</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">138XXXXXXXX</div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">所在学院</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">班级</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">联系方式</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
       <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">请假类型</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">病假</div><button class="row-del" title="删除此行">×</button></div>
       <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">是否离校</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">否</div><button class="row-del" title="删除此行">×</button></div>
       <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">是否有课</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">是</div><button class="row-del" title="删除此行">×</button></div>
@@ -347,9 +351,9 @@ body.pb-rolling .app{padding-top:94px}
         <button class="row-del" title="删除此行">×</button>
       </div>
       <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">请假事由</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">发烧</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">辅导员姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">张三</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row row-three-lines"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">学院副书记姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">李四</div><button class="row-del" title="删除此行">×</button></div>
-      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">班长姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false">王五</div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">辅导员姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row row-three-lines"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">学院副书记姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
+      <div class="row row-multiline"><div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">班长姓名</span><span class="req">*</span></div><div class="value" contenteditable="true" spellcheck="false"></div><button class="row-del" title="删除此行">×</button></div>
 
       <div class="commit">
         <label>
@@ -357,16 +361,17 @@ body.pb-rolling .app{padding-top:94px}
         </label>
       </div>
 
-      <button class="add-row-hint editor-ui-x" id="addRow">＋ 加一行</button>
+      <button class="add-row-hint editor-ui-x" id="addRow">加一行</button>
     </div>
   </main>
 </div>
 
 <div class="editor-ui" id="editorUI">
   <span class="hint">点文字直接改</span>
-  <button id="btnChrome" class="on">📱 外框</button>
-  <button id="btnExport" class="primary">🖼 生成图片</button>
-  <button id="btnReset">↺ 恢复默认</button>
+  <button id="btnChrome" class="on">外框</button>
+  <button id="btnExport" class="primary">生成图片</button>
+  <span class="action-status" id="exportStatus" role="status" aria-live="polite"></span>
+  <button id="btnReset">恢复默认</button>
 </div>
 
 <div class="signal-editor editor-ui-x" id="signalEditor" hidden role="dialog" aria-label="状态栏设置">
@@ -389,7 +394,8 @@ body.pb-rolling .app{padding-top:94px}
   <input type="range" id="cropPos" min="0" max="1000" value="0">
   <div class="dims" id="dimsLabel"></div>
   <div class="btns">
-    <button class="save" id="btnSave">⬇ 保存 PNG</button>
+    <button class="save" id="btnSave">保存图片</button>
+    <span class="action-status" id="saveStatus" role="status" aria-live="polite"></span>
     <button class="close" id="btnClose">关闭</button>
   </div>
   <div class="tip">长按图片（手机）或右键（电脑）也可直接保存</div>
@@ -536,7 +542,7 @@ body.pb-rolling .app{padding-top:94px}
     var row = document.createElement('div');
     row.className = 'row';
     row.innerHTML = '<div class="label"><span class="lbl-t" contenteditable="true" spellcheck="false">姓名</span><span class="req">*</span></div>' +
-                    '<div class="value" contenteditable="true" spellcheck="false">张三</div>' +
+                    '<div class="value" contenteditable="true" spellcheck="false"></div>' +
                     '<button class="row-del" title="删除此行">×</button>';
     container.insertBefore(row, document.querySelector('.commit'));
     var vt = row.querySelector('.value');
@@ -683,33 +689,42 @@ body.pb-rolling .app{padding-top:94px}
   document.getElementById('cropPos').addEventListener('input', function () {
     pos = this.value / 1000; applyCrop();
   });
-  document.getElementById('btnExport').addEventListener('click', async function () {
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    await document.fonts.ready;
+  var btnExport = document.getElementById('btnExport');
+  var exportStatus = document.getElementById('exportStatus');
+  var generating = false;
+  btnExport.addEventListener('click', async function () {
+    if (generating) return;
+    generating = true;
+    btnExport.disabled = true;
+    exportStatus.textContent = '正在生成图片';
     var prevScroll = window.scrollY;
-    window.scrollTo(0, 0);
-    var btn = this;
-    btn.textContent = '⏳ 正在生成…';
-    closeSignal();
-    html2canvas(app, {
-      onclone: function (doc) { doc.getElementById('btnTop').classList.add('hidden'); },
-      scale: 3, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
-      ignoreElements: function (el) {
-        return el.classList && (el.classList.contains('editor-ui') || el.classList.contains('row-del') || el.classList.contains('add-row-hint'));
-      }
-    }).then(function (canvas) {
+    try {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      await document.fonts.ready;
+      window.scrollTo(0, 0);
+      closeSignal();
+      var canvas = await html2canvas(app, {
+        onclone: function (doc) { doc.getElementById('btnTop').classList.add('hidden'); },
+        scale: 3, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
+        ignoreElements: function (el) {
+          return el.classList && (el.classList.contains('editor-ui') || el.classList.contains('row-del') || el.classList.contains('add-row-hint'));
+        }
+      });
       paintSignal(canvas);
       fullCanvas = canvas;
       fullCssH = Math.round(canvas.height / 3);
       pos = 0; document.getElementById('cropPos').value = 0;
       applyCrop();
       mask.style.display = 'flex';
-      btn.textContent = '🖼 生成图片';
       window.scrollTo(0, prevScroll);
-    }).catch(function (err) {
-      alert('生成失败：' + err);
-      btn.textContent = '🖼 生成图片';
-    });
+    } catch (e) {
+      alert('生成失败，请重试');
+      window.scrollTo(0, prevScroll);
+    } finally {
+      generating = false;
+      btnExport.disabled = false;
+      exportStatus.textContent = '';
+    }
   });
   document.getElementById('btnClose').addEventListener('click', function () { mask.style.display = 'none'; });
   document.getElementById('btnSave').addEventListener('click', function () {
@@ -745,6 +760,7 @@ window.__PACK_VER = 27;
   function fillFromMeta() {
     var u = {};
     try { u = JSON.parse(window.SDMU && window.SDMU.getUser() || '{}'); } catch (e) {}
+    if (!u || typeof u !== 'object') u = {};
     var map = {
       '学号': u.userId,
       '姓名': u.userName,
@@ -762,7 +778,9 @@ window.__PACK_VER = 27;
         }
       }
     });
-    try { window.SDMU.toast('已自动填写：' + (filled.join('、') || '无')); } catch (e) {}
+    if (!filled.length) {
+      try { window.SDMU.toast('未读取到山管账号信息，请手动填写'); } catch (e) {}
+    }
   }
   // 请假时间起/止默认今天
   function fillToday() {
@@ -943,8 +961,8 @@ document.querySelectorAll('.statusbar').forEach(function (e) { e.remove(); });
     n.addEventListener('click', fn);
     return n;
   }
-  var btnSave = $('btnSave');
   var mask = $('exportMask');
+  var savePending = false;
   function dataFromImg() {
     var src = ($('exportImg') || {}).src || '';
     var i = src.indexOf(',');
@@ -954,12 +972,27 @@ document.querySelectorAll('.statusbar').forEach(function (e) { e.remove(); });
     var t = (($('.title') || {}).textContent || '请销假申请');
     return t.replace(/[\\/:*?"<>|\s]/g, '').trim() || '请销假申请';
   }
+  function setSavePending(pending, message) {
+    savePending = pending;
+    var saveBtn = $('btnSave');
+    var shareBtn = $('btnShareNative');
+    var status = $('saveStatus');
+    if (saveBtn) saveBtn.disabled = pending;
+    if (shareBtn) shareBtn.disabled = pending;
+    if (status) status.textContent = pending ? message : '';
+  }
+  function showSaveResult(message, failed) {
+    setSavePending(false);
+    var tip = document.querySelector('.export-mask .tip');
+    if (tip) tip.textContent = message;
+    if (failed) alert(message);
+  }
   function send(share) {
     var data = dataFromImg();
-    if (!data) return;
-    if (btnSave) btnSave.textContent = '⏳ 处理中…';
+    if (!data || savePending) return;
+    setSavePending(true, share ? '正在保存图片并分享' : '正在保存图片');
     try { window.ShotBridge.save(data, nameOf(), share ? '1' : '0'); }
-    catch (e) { if (btnSave) btnSave.textContent = '⬇ 保存 PNG'; alert('导出失败：' + e); }
+    catch (e) { showSaveResult('保存失败，请重试', true); }
   }
   rebind($('btnSave'), function () { send(false); });
   rebind($('btnClose'), function () { mask.style.display = 'none'; });
@@ -967,12 +1000,12 @@ document.querySelectorAll('.statusbar').forEach(function (e) { e.remove(); });
   var btns = document.querySelector('.export-mask .btns');
   if (btns && !document.getElementById('btnShareNative')) {
     var sb = document.createElement('button');
-    sb.id = 'btnShareNative'; sb.className = 'save'; sb.textContent = '📤 分享';
+    sb.id = 'btnShareNative'; sb.className = 'save'; sb.textContent = '分享';
     sb.addEventListener('click', function () { send(true); });
     btns.appendChild(sb);
   }
   var tip = document.querySelector('.export-mask .tip');
-  if (tip) tip.textContent = '保存结果见顶部提示 · 分享会弹出系统面板';
+  if (tip) tip.textContent = '分享会弹出系统面板';
   // WebView 渲染超大 dataURL img 不可靠：hook toDataURL 截获裁剪画布，
   // 预览直接用 canvas 元素绘制（无需 img/dataURL），滑块拖动实时跟随
   var lastCanvas = null;
@@ -1010,17 +1043,14 @@ document.querySelectorAll('.statusbar').forEach(function (e) { e.remove(); });
     try { this.canvas.__stamp = (this.canvas.__stamp || 0) + 1; } catch (e) {}
     return r;
   };
-  // 原生结果回调：更新提示 + 复位按钮
+  // 原生结果回调：更新提示 + 恢复按钮
   window.__shotResult = function (json) {
     json = json || {};
-    var msg = json.error ? ('失败：' + json.error)
-      : json.shared ? '已保存相册并弹出分享'
-      : json.saved ? '已保存到相册 Pictures/SDMULite' : '完成';
-    var saveBtn = $('btnSave');
-    if (saveBtn) saveBtn.textContent = '⬇ 保存 PNG';
-    var t = document.querySelector('.export-mask .tip');
-    if (t) t.textContent = msg;
-    if (json.error) alert(msg);
+    var saved = !!json.saved;
+    var msg = json.error ? '保存失败，请重试'
+      : saved ? '已保存到相册'
+      : '保存未完成，请重试';
+    showSaveResult(msg, !saved);
   };
 })();
 </script>

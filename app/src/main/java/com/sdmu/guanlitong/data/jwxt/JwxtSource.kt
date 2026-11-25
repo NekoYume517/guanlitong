@@ -7,12 +7,12 @@ enum class JwxtSource(val key: String, val label: String, val hint: String) {
     Official(
         key = "official",
         label = "官方教务系统",
-        hint = "直连 jwxt.sdmu.edu.cn，需要登录官方教务账号",
+        hint = "使用教务系统账号登录",
     ),
     Grab(
         key = "grab",
         label = "抢课助手",
-        hint = "需要登录抢课助手并配置教务账号",
+        hint = "使用抢课助手账号登录，并绑定教务账号",
     ),
     ;
 

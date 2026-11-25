@@ -148,7 +148,7 @@ fun SdgyTimetableScreen(
             loading = false
             if (courses.isNotEmpty()) {
                 cacheOnly = true
-                error = "刷新失败，正在显示上次缓存：${e.sdgyMessage()}"
+                error = "课表刷新失败，暂时显示上次结果"
             } else {
                 error = e.sdgyMessage()
             }
@@ -163,7 +163,7 @@ fun SdgyTimetableScreen(
     val visible = courses.filter { weekMatch(it.raw, week) && slotInWeek(it, week) }
 
     SdgyScaffold(
-        title = "山管课表",
+        title = "课表",
         onBack = onBack,
         modifier = modifier,
         actions = {
@@ -230,14 +230,14 @@ fun SdgyTimetableScreen(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        error ?: "课表暂无数据",
+                        error ?: "还没有课表",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                     if (error?.contains("登录") == true) {
                         Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onOpenAccount) { Text("去登录山管app") }
+                        TextButton(onClick = onOpenAccount) { Text("去登录山管 App") }
                     }
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { tick++ }) { Text("重试") }
@@ -370,7 +370,7 @@ private fun TimetableGrid(
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            "点击课程可查看挂科率、平均分与上课名单。",
+            "点课程查看详情",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.fillMaxWidth(),
@@ -401,6 +401,8 @@ private fun CourseDetailDialog(
     var classmates by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var topScorers by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var namesLoading by remember { mutableStateOf(false) }
+    var namesError by remember { mutableStateOf<String?>(null) }
+    var namesTick by remember { mutableIntStateOf(0) }
     var showNames by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(slot, week) {
@@ -485,10 +487,12 @@ private fun CourseDetailDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = {
                                 namesLoading = true
+                                namesError = null
                                 showNames = "classmates"
-                            }, enabled = !namesLoading) { Text("上课人（${d.optString("skrs")}）") }
+                            }, enabled = !namesLoading) { Text("上课名单（${d.optString("skrs")}）") }
                             TextButton(onClick = {
                                 namesLoading = true
+                                namesError = null
                                 showNames = "scores"
                             }, enabled = !namesLoading) { Text("最高分名单") }
                         }
@@ -502,7 +506,7 @@ private fun CourseDetailDialog(
     )
 
     if (showNames != null) {
-        LaunchedEffect(showNames) {
+        LaunchedEffect(showNames, namesTick) {
             val wantClassmates = showNames == "classmates"
             val d = detail ?: return@LaunchedEffect
             val result = runCatching {
@@ -510,14 +514,23 @@ private fun CourseDetailDialog(
                     val arr = if (wantClassmates) client.classmates(d) else client.topScorers(d)
                     (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
                 }
-            }.getOrDefault(emptyList())
-            if (wantClassmates) classmates = result else topScorers = result
+            }
+            result.onSuccess {
+                namesError = null
+                if (wantClassmates) classmates = it else topScorers = it
+            }.onFailure {
+                namesError = it.sdgyMessage()
+                if (wantClassmates) classmates = emptyList() else topScorers = emptyList()
+            }
             namesLoading = false
         }
         NameListDialog(
-            title = if (showNames == "classmates") "上课人（${classmates.size}）"
+            title = if (showNames == "classmates") "上课名单（${classmates.size}）"
             else "最高分名单（${topScorers.size}人）",
             rows = if (showNames == "classmates") classmates else topScorers,
+            emptyText = if (showNames == "classmates") "没有查到上课名单" else "没有查到最高分名单",
+            error = namesError,
+            onRetry = { namesLoading = true; namesTick++ },
             highlight = if (showNames == "classmates") "" else detail?.optString("zgfzscj").orEmpty(),
             loading = namesLoading,
             onClose = { showNames = null; namesLoading = false },
@@ -555,6 +568,9 @@ private fun InfoLine(label: String, value: String) {
 private fun NameListDialog(
     title: String,
     rows: List<JSONObject>,
+    emptyText: String,
+    error: String?,
+    onRetry: () -> Unit,
     highlight: String,
     loading: Boolean,
     onClose: () -> Unit,
@@ -569,8 +585,16 @@ private fun NameListDialog(
                     Spacer(Modifier.width(10.dp))
                     Text("加载中…", style = MaterialTheme.typography.bodySmall)
                 }
+                error != null -> Column {
+                    Text(
+                        "名单加载失败",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onRetry) { Text("重试") }
+                }
                 rows.isEmpty() -> Text(
-                    "暂无数据",
+                    emptyText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -58,7 +58,7 @@ object DesktopData {
             weekCourses = cached?.timetable?.coursesInWeek(currentWeek)?.size ?: 0,
             currentWeek = currentWeek,
             accounts = listOf(
-                "官方教务" to (accounts["jwxt"]?.loggedIn == true),
+                "教务系统" to (accounts["jwxt"]?.loggedIn == true),
                 "抢课助手" to (accounts["grab"]?.loggedIn == true),
             ),
         )

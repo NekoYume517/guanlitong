@@ -112,7 +112,7 @@ fun FeaturesScreen(
             TextField(
                 value = query,
                 onValueChange = onQueryChange,
-                placeholder = { Text("搜索所需功能") },
+                placeholder = { Text("搜索功能") },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
@@ -283,12 +283,6 @@ private fun ServicePane(
                     .verticalScroll(scrollState)
                     .padding(start = 16.dp, top = 6.dp, end = 16.dp, bottom = 120.dp),
             ) {
-                Text(
-                    text = "全部功能",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
                 if (features.isEmpty()) {
                     Text(
                         text = "这个服务还没有配置功能",
@@ -323,7 +317,7 @@ private fun SearchResultsPane(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = if (results.isEmpty()) "没有找到「$keyword」相关的功能" else "找到 ${results.size} 个功能",
+            text = if (results.isEmpty()) "没有找到「$keyword」" else "搜索结果",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),

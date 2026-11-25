@@ -55,9 +55,9 @@ internal class QuickActionOverlayState {
         private set
     var menuVisible by mutableStateOf(false)
         private set
-    var editorFocusId by mutableStateOf<String?>(null)
+    var editorWidgetId by mutableStateOf<String?>(null)
         private set
-    var editorFocusIndex by mutableStateOf<Int?>(null)
+    var editorFocusId by mutableStateOf<String?>(null)
         private set
     var editorOpen by mutableStateOf(false)
         private set
@@ -77,30 +77,30 @@ internal class QuickActionOverlayState {
     }
 
     fun edit() {
+        editorWidgetId = menu?.target?.widgetId
         editorFocusId = menu?.target?.feature?.id
-        editorFocusIndex = menu?.target?.index
         menuVisible = false
     }
 
     fun openPendingEditor() {
-        if (editorFocusId != null) editorOpen = true
+        if (editorWidgetId != null && editorFocusId != null) editorOpen = true
     }
 
-    fun editAll() {
+    fun editAll(widgetId: String) {
         menu = null
         menuVisible = false
-        openEditor(null)
+        openEditor(widgetId, null)
     }
 
     fun dismissMenu() { menuVisible = false }
     fun dismissEditor() {
         editorOpen = false
+        editorWidgetId = null
         editorFocusId = null
-        editorFocusIndex = null
     }
-    fun openEditor(id: String?) {
+    fun openEditor(widgetId: String, id: String?) {
+        editorWidgetId = widgetId
         editorFocusId = id
-        editorFocusIndex = null
         editorOpen = true
     }
 }

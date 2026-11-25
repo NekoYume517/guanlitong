@@ -264,7 +264,7 @@ fun GrabLoginCard(
                     )
                     Spacer(Modifier.width(10.dp))
                 }
-                Text(if (loading) "正在登录…" else "登录抢课助手")
+                Text("登录抢课助手")
             }
         }
     }

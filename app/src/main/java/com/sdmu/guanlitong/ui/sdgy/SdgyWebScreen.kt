@@ -106,7 +106,7 @@ fun SdgyWebScreen(
                 else -> ""
             }
             if (target.isBlank()) {
-                loadingError = "这个功能没有配置地址"
+                loadingError = "这个功能暂时不可用"
             } else {
                 auth = credentials
                 resolvedUrl = target
@@ -296,7 +296,7 @@ private fun SdgyWebView(
                         ) {
                             super.onReceivedError(view, request, error)
                             if (request?.isForMainFrame == true) {
-                                pageError = error?.description?.toString() ?: "网页加载失败"
+                                pageError = "页面暂时打不开，请稍后重试"
                             }
                         }
 
@@ -400,7 +400,7 @@ private fun SdgyWebView(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    "网页加载失败：${pageError.orEmpty()}",
+                    "页面暂时打不开，请稍后重试",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

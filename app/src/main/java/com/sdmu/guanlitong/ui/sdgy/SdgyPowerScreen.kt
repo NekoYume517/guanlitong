@@ -114,7 +114,7 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             SdgyPowerApi.buildings(area.id)
         }
         buildings = list
-        if (list.isEmpty()) error = "获取楼栋失败：${SdgyPowerApi.lastErr}"
+        if (list.isEmpty()) error = "楼栋列表加载失败，请稍后重试"
     }
 
     LaunchedEffect(selection.room, tick) {
@@ -132,8 +132,8 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         usage = result.second
         daily = result.third
         when {
-            result.first == null -> error = "该房间未找到电表：${SdgyPowerApi.lastErr}"
-            result.second == null -> error = "获取用电数据失败：${SdgyPowerApi.lastErr}"
+            result.first == null -> error = "没有找到这个房间的电表"
+            result.second == null -> error = "用电数据加载失败，请重试"
         }
         loading = false
     }
@@ -266,7 +266,7 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             }
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                "总示数 ${u.total} · 抄表 ${u.readTime.ifBlank { "--" }}",
+                                "电表读数 ${u.total} · 抄表时间 ${u.readTime.ifBlank { "--" }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
                             )
@@ -277,11 +277,11 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     Row(Modifier.fillMaxWidth()) {
                         PowerInfoCard("电表状态", u.state.ifBlank { "--" }, Modifier.weight(1f))
                         Spacer(Modifier.width(10.dp))
-                        PowerInfoCard("闸位", u.valve.ifBlank { "--" }, Modifier.weight(1f))
+                        PowerInfoCard("供电开关", u.valve.ifBlank { "--" }, Modifier.weight(1f))
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth()) {
-                        PowerInfoCard("表具", meter?.name?.ifBlank { "--" } ?: "--", Modifier.weight(1f))
+                        PowerInfoCard("电表类型", meter?.name?.ifBlank { "--" } ?: "--", Modifier.weight(1f))
                         Spacer(Modifier.width(10.dp))
                         PowerInfoCard("表号", meter?.id ?: "--", Modifier.weight(1f))
                     }
@@ -335,7 +335,7 @@ fun SdgyPowerScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             SdgyPowerApi.rooms(b.id, floor)
                         }
                         if (rooms.isEmpty()) {
-                            error = "该楼层没有房间：${SdgyPowerApi.lastErr}"
+                            error = "这个楼层没有房间"
                             pickerStep = null
                         } else {
                             pickerStep = "room"

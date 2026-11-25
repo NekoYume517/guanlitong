@@ -21,9 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -121,7 +119,7 @@ internal fun QuickActionContextMenu(
                 }
 
                 val menuWidth = with(density) { 236.dp.toPx() }
-                val menuHeight = with(density) { 105.dp.toPx() }
+                val menuHeight = with(density) { 60.dp.toPx() }
                 val gap = with(density) { 10.dp.toPx() }
                 val margin = with(density) { 16.dp.toPx() }
                 val x = (anchor.center.x - menuWidth / 2)
@@ -155,14 +153,8 @@ internal fun QuickActionContextMenu(
                     ) {
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
                             QuickMenuAction(
-                                text = "更换此功能",
+                                text = "编辑快捷功能",
                                 icon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-                                onClick = onEdit,
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            QuickMenuAction(
-                                text = "调整顺序",
-                                icon = { Icon(Icons.Outlined.SwapHoriz, contentDescription = null) },
                                 onClick = onEdit,
                             )
                         }

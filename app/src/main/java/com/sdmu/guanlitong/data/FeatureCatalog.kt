@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.HowToReg
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.QrCodeScanner
-import androidx.compose.material.icons.outlined.School
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** 教务系统里的原生页面。 */
@@ -92,7 +91,7 @@ object FeatureCatalog {
             id = "jwxt.timetable",
             serviceId = "jwxt",
             title = "课表",
-            subtitle = "按周查看 · 本地缓存",
+            subtitle = "按周查看课程",
             icon = Icons.Outlined.CalendarMonth,
             action = FeatureAction.Timetable,
         ),
@@ -124,23 +123,15 @@ object FeatureCatalog {
             id = "jwxt.tasks",
             serviceId = "jwxt",
             title = "抢课任务",
-            subtitle = "课满时自动蹲余量（抢课助手）",
+            subtitle = "课程满员后自动等待名额（抢课助手）",
             icon = Icons.Outlined.Bolt,
             action = FeatureAction.Jwxt(JwxtPage.Tasks),
             grabSourceOnly = true,
         ),
         ServiceFeature(
-            id = "jwxt.home",
-            serviceId = "jwxt",
-            title = "教务首页",
-            subtitle = "课表、成绩、选课入口",
-            icon = Icons.Outlined.School,
-            action = FeatureAction.Jwxt(JwxtPage.Hub),
-        ),
-        ServiceFeature(
             id = "sdgy.timetable",
             serviceId = "sdgy",
-            title = "山管课表",
+            title = "课表",
             subtitle = "按周查看 · 课程详情",
             icon = Icons.Outlined.CalendarMonth,
             // 与教务课表共用同一个页面，山管数据只补充统计与名单。
@@ -174,7 +165,7 @@ object FeatureCatalog {
             id = "sdgy.shot",
             serviceId = "sdgy",
             title = "请销假",
-            subtitle = "生成申请截图",
+            subtitle = "生成申请图片",
             icon = Icons.Outlined.EditNote,
             action = FeatureAction.Sdgy(SdgyPage.Shot),
         ),
@@ -207,7 +198,7 @@ object FeatureCatalog {
             id = "sdgy.app.${entry.id}",
             serviceId = "sdgy",
             title = entry.name,
-            subtitle = entry.description.ifBlank { "山管官方应用" },
+            subtitle = entry.description,
             icon = iconFor(entry),
             iconUrl = entry.iconUrl,
             action = action,
@@ -225,11 +216,10 @@ object FeatureCatalog {
         else -> Icons.Outlined.PhoneAndroid
     }
 
-    /** 概览页「快捷功能」默认展示的 6 个入口。 */
+    /** 概览页「快捷功能」默认展示的入口。 */
     val quickFeatures: List<ServiceFeature> = listOf(
         "jwxt.timetable",
         "jwxt.grades",
         "jwxt.selection",
-        "jwxt.home",
     ).mapNotNull(::byId)
 }

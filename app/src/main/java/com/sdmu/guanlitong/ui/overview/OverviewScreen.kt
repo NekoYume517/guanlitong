@@ -44,7 +44,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,7 +151,6 @@ fun OverviewScreen(
     onOpenFeature: (ServiceFeature) -> Unit,
     onOpenTimetable: () -> Unit,
     onOpenAccount: (SchoolService) -> Unit,
-    onOpenFeatures: () -> Unit,
     onOpenMine: () -> Unit,
     modifier: Modifier = Modifier,
     jwxtSource: JwxtSource = JwxtSource.Official,
@@ -169,15 +167,17 @@ fun OverviewScreen(
     val quickActionState = rememberQuickActionOverlayState()
     val quickTargets = remember { mutableMapOf<String, QuickActionTarget>() }
     val quickPress = remember { QuickActionPressTracker() }
-    val quickFeatureIds by quickActions.featureIds.collectAsState()
+    val quickIdsByWidget by quickActions.idsByWidget.collectAsState()
     val sdgyRepository = remember { com.sdmu.guanlitong.data.sdgy.SdgyRepository(context) }
     var sdgyGroups by remember {
         mutableStateOf(com.sdmu.guanlitong.data.sdgy.SdgyAppsStore.load(context)?.groups.orEmpty())
     }
-    val quickFeatures = quickFeatureIds.mapNotNull { id ->
-        FeatureCatalog.byId(id) ?: sdgyGroups.asSequence().flatMap { it.apps }
-            .map(FeatureCatalog::sdgyApp).firstOrNull { it.id == id }
-    }
+    // 每块快捷功能卡片使用自己的入口列表，互不影响。
+    fun quickFeaturesFor(widgetId: String): List<ServiceFeature> =
+        (quickIdsByWidget[widgetId] ?: quickActions.featureIds(widgetId)).mapNotNull { id ->
+            FeatureCatalog.byId(id) ?: sdgyGroups.asSequence().flatMap { it.apps }
+                .map(FeatureCatalog::sdgyApp).firstOrNull { it.id == id }
+        }
     var containerOrigin by remember { mutableStateOf(Offset.Zero) }
     val currentContainerOrigin by rememberUpdatedState(containerOrigin)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -227,7 +227,6 @@ fun OverviewScreen(
             OverviewHeader(
                 today = today,
                 onAddWidget = { galleryOpen = true },
-                onOpenMine = onOpenMine,
             )
 
             Column(
@@ -342,7 +341,7 @@ fun OverviewScreen(
                                     today = today,
                                     accounts = accounts,
                                     jwxtSource = jwxtSource,
-                                    quickActions = quickFeatures,
+                                    quickActions = quickFeaturesFor(item.id),
                                     onQuickActionPress = quickPress::down,
                                     onOpenQuickActionMenu = { target, token ->
                                         quickPress.longPress(token)
@@ -351,7 +350,7 @@ fun OverviewScreen(
                                     onQuickActionPositioned = { target ->
                                         quickTargets["${target.widgetId}/${target.index}"] = target
                                     },
-                                    onEditQuickActions = quickActionState::editAll,
+                                    onEditQuickActions = { quickActionState.editAll(item.id) },
                                     menuTargetIndex = if (quickActionState.menu?.target?.widgetId == item.id) {
                                         quickActionState.menu?.target?.index
                                     } else {
@@ -368,10 +367,10 @@ fun OverviewScreen(
                 }
 
                 TextButton(
-                    onClick = onOpenFeatures,
+                    onClick = { galleryOpen = true },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("查看全部功能")
+                    Text("添加小组件")
                 }
             }
         }
@@ -388,7 +387,7 @@ fun OverviewScreen(
                 today = today,
                 accounts = accounts,
                 jwxtSource = jwxtSource,
-                quickFeatures = quickFeatures,
+                quickFeatures = quickFeaturesFor(dragged.id),
                 onOpenFeature = onOpenFeature,
                 onOpenTimetable = onOpenTimetable,
                 onOpenAccount = onOpenAccount,
@@ -474,12 +473,13 @@ fun OverviewScreen(
             },
         )
     }
-    if (quickActionState.editorOpen) {
+    val editorWidgetId = quickActionState.editorWidgetId
+    if (quickActionState.editorOpen && editorWidgetId != null) {
         QuickActionEditorSheet(
             store = quickActions,
+            widgetId = editorWidgetId,
             focusId = quickActionState.editorFocusId,
-            focusIndex = quickActionState.editorFocusIndex,
-            selectedFeatures = quickFeatures,
+            selectedFeatures = quickFeaturesFor(editorWidgetId),
             sdgyGroups = sdgyGroups,
             loggedInServices = accounts.filterValues { it.loggedIn }.keys,
             onRefreshSdgy = {
@@ -1139,7 +1139,6 @@ private fun DraggedCardOverlay(
 private fun OverviewHeader(
     today: LocalDate,
     onAddWidget: () -> Unit,
-    onOpenMine: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1159,9 +1158,6 @@ private fun OverviewHeader(
         }
         IconButton(onClick = onAddWidget) {
             Icon(Icons.Outlined.Tune, contentDescription = "添加小组件")
-        }
-        IconButton(onClick = onOpenMine) {
-            Icon(Icons.Outlined.Person, contentDescription = "我的")
         }
     }
 }
@@ -1184,7 +1180,7 @@ private fun EmptyWidgets(onAddWidget: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "点「+」从底部面板挑选今日课程、下一节课、快捷功能、教务概览或账号状态。",
+                text = "添加要显示的内容",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1388,7 +1384,7 @@ private fun TodayCoursesWidget(
                     )
                 } else {
                     Text(
-                        text = "还没有课表缓存。打开课表登录一次后，这里会显示今天的课。",
+                        text = "打开课表并登录后显示",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1514,8 +1510,7 @@ private fun rememberNow(): LocalDateTime {
 /**
  * 「下一节课」：小号显示最近一节，中号显示接下来两节（第一节为主）。
  *
- * 数据一律来自课表缓存，所以卡片底部标明「使用缓存」；当前来源的账号没有登录时
- * 再加一枚「登录失效」，提醒需要重新登录才能刷新课表。
+ * 当前来源的账号没有登录时，显示「未登录」，提醒用户登录后才能刷新课表。
  */
 @Composable
 private fun NextClassWidget(
@@ -1532,7 +1527,7 @@ private fun NextClassWidget(
         now = rememberNow(),
     )
     val upcoming = snapshot.upcoming
-    val sessionLost = snapshot.sessionLost
+    val needsLogin = snapshot.sessionLost
     val today = snapshot.today
 
     WidgetCard(
@@ -1554,7 +1549,7 @@ private fun NextClassWidget(
                     )
                 } else {
                     Text(
-                        text = "还没有课表缓存。打开课表登录一次后，这里会显示接下来要上的课。",
+                        text = "打开课表并登录后显示",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1600,14 +1595,16 @@ private fun NextClassWidget(
                         dayPrefix(next, today).takeIf { it.isNotBlank() }?.let(::add)
                         next.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
                         if (next.isOngoing) add(next.timeLabel) else add(countdownLabel(next))
-                        add(if (sessionLost) "登录失效" else "使用缓存")
                     }.joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (sessionLost) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (needsLogin) "未登录 · 显示上次课表" else "课表更新至 ${formatUpdatedAt(snapshot.savedAt)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1681,27 +1678,15 @@ private fun NextClassWidget(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Row {
-                        if (sessionLost) {
-                            Text(
-                                text = "登录失效",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Text(
-                                text = " · ",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                        Text(
-                            text = "使用缓存" + (cached?.savedAt?.takeIf { it > 0 }?.let {
-                                " · ${formatUpdatedAt(it)} 更新"
-                            } ?: ""),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        text = if (needsLogin) {
+                            "未登录，显示上次课表"
+                        } else {
+                            "课表更新至 ${formatUpdatedAt(snapshot.savedAt)}"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -2056,17 +2041,16 @@ private fun AccountsWidget(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (service.id == "jwxt" && jwxtSource == JwxtSource.Grab) {
+                            Text(
+                                text = "教务账号 · 抢课助手",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     StatusDot(loggedIn = account?.loggedIn == true)
                 }
-            }
-            if (size == WidgetSize.Large) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "登录状态跟随「教务系统 → 数据来源」的选择。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -2106,7 +2090,7 @@ private fun WidgetGallery(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "和首页同尺寸的真实预览，点一下添加到底部。",
+                    text = "选择要显示在概览里的内容",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -2171,9 +2155,9 @@ private fun WidgetGallery(
 }
 
 private fun sizeHint(size: WidgetSize): String = when (size) {
-    WidgetSize.Small -> "两块并排，只留一个重点数字"
-    WidgetSize.Medium -> "占满一行，显示主要内容"
-    WidgetSize.Large -> "占满一行，信息最全"
+    WidgetSize.Small -> "显示一项重点信息"
+    WidgetSize.Medium -> "显示更多内容"
+    WidgetSize.Large -> "显示最完整的信息"
 }
 
 /**

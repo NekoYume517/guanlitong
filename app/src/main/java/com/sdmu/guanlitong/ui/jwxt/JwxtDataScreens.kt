@@ -88,11 +88,25 @@ import com.sdmu.guanlitong.data.jwxt.SelectionStatus
 import com.sdmu.guanlitong.data.jwxt.TeachingClass
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 // ── 页面共用的状态与外壳 ────────────────────────────────────
+
+private fun jwxtDataMessage(error: Throwable, fallback: String): String = when {
+    error is JwxtSessionExpiredException -> "登录状态已失效，请重新登录"
+    error is SocketTimeoutException -> "连接超时，请检查网络后重试"
+    error is UnknownHostException || error is ConnectException || error is IOException -> "网络连接失败，请检查网络后重试"
+    error is JwxtException -> error.message
+        ?.takeUnless { it.isBlank() || it.contains("HTTP") }
+        ?: fallback
+    else -> fallback
+}
 
 private sealed interface DataState<out T> {
     data object Loading : DataState<Nothing>
@@ -134,7 +148,7 @@ private fun JwxtPageScaffold(
                         Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                     }
                     IconButton(onClick = args.onOpenWeb) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在网页中打开")
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器打开")
                     }
                 },
             )
@@ -250,7 +264,7 @@ fun JwxtGradesScreen(
 
     LaunchedEffect(access, refreshToken, attempt, cookie) {
         if (origin.isBlank()) {
-            state = DataState.Failed("还没有配置${access.source.label}地址")
+            state = DataState.Failed("这个数据来源暂时不可用")
             return@LaunchedEffect
         }
         if (cookie.isBlank()) {
@@ -264,11 +278,11 @@ fun JwxtGradesScreen(
         state = try {
             DataState.Ready(client?.fetchGrades() ?: throw JwxtException("数据来源不可用"))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed(e.message ?: "登录状态已失效")
+            DataState.Failed("登录状态已失效，请重新登录")
         } catch (e: JwxtException) {
-            DataState.Failed(e.message ?: "读取成绩失败")
+            DataState.Failed(jwxtDataMessage(e, "读取成绩失败，请稍后重试"))
         } catch (e: Exception) {
-            DataState.Failed("读取成绩失败：${e.message ?: "未知错误"}")
+            DataState.Failed(jwxtDataMessage(e, "读取成绩失败，请稍后重试"))
         } finally {
             refreshing = false
         }
@@ -489,7 +503,7 @@ fun JwxtExamsScreen(
 
     LaunchedEffect(access, refreshToken, attempt, cookie) {
         if (origin.isBlank()) {
-            state = DataState.Failed("还没有配置${access.source.label}地址")
+            state = DataState.Failed("这个数据来源暂时不可用")
             return@LaunchedEffect
         }
         if (cookie.isBlank()) {
@@ -503,11 +517,11 @@ fun JwxtExamsScreen(
         state = try {
             DataState.Ready(client?.fetchExams() ?: throw JwxtException("数据来源不可用"))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed(e.message ?: "登录状态已失效")
+            DataState.Failed("登录状态已失效，请重新登录")
         } catch (e: JwxtException) {
-            DataState.Failed(e.message ?: "读取考试安排失败")
+            DataState.Failed(jwxtDataMessage(e, "读取考试安排失败，请稍后重试"))
         } catch (e: Exception) {
-            DataState.Failed("读取考试安排失败：${e.message ?: "未知错误"}")
+            DataState.Failed(jwxtDataMessage(e, "读取考试安排失败，请稍后重试"))
         } finally {
             refreshing = false
         }
@@ -628,7 +642,7 @@ private fun ExamCard(exam: ExamItem, now: Long, fmt: SimpleDateFormat) {
                 Text(
                     text = buildString {
                         if (!dateLabel.isNullOrBlank()) append(dateLabel)
-                        if (exam.date.isNotBlank()) append("  ").append(exam.date)
+                        if (dateLabel.isNullOrBlank() && exam.date.isNotBlank()) append("  ").append(exam.date)
                         if (exam.start.isNotBlank()) {
                             append("  ").append(exam.start)
                             if (exam.end.isNotBlank()) append("-").append(exam.end)
@@ -721,11 +735,11 @@ fun JwxtSelectionScreen(
         chosenState = try {
             DataState.Ready(c.fetchChosen())
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed(e.message ?: "登录状态已失效")
+            DataState.Failed("登录状态已失效，请重新登录")
         } catch (e: JwxtException) {
-            DataState.Failed(e.message ?: "读取已选课程失败")
+            DataState.Failed(jwxtDataMessage(e, "读取已选课程失败，请稍后重试"))
         } catch (e: Exception) {
-            DataState.Failed("读取已选课程失败：${e.message ?: "未知错误"}")
+            DataState.Failed(jwxtDataMessage(e, "读取已选课程失败，请稍后重试"))
         }
     }
 
@@ -736,11 +750,11 @@ fun JwxtSelectionScreen(
         searchState = try {
             DataState.Ready(c.queryCourses(keyword.trim()))
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed(e.message ?: "登录状态已失效")
+            DataState.Failed("登录状态已失效，请重新登录")
         } catch (e: JwxtException) {
-            DataState.Failed(e.message ?: "查询课程失败")
+            DataState.Failed(jwxtDataMessage(e, "查询课程失败，请稍后重试"))
         } catch (e: Exception) {
-            DataState.Failed("查询课程失败：${e.message ?: "未知错误"}")
+            DataState.Failed(jwxtDataMessage(e, "查询课程失败，请稍后重试"))
         } finally {
             refreshing = false
         }
@@ -772,7 +786,7 @@ fun JwxtSelectionScreen(
         runCatching { c.classes(course) }
             .onSuccess { classesByCourse[course.kchId] = it }
             .onFailure {
-                scope.launch { snackbar.showSnackbar(it.message ?: "读取教学班失败") }
+                scope.launch { snackbar.showSnackbar(jwxtDataMessage(it, "读取教学班失败，请稍后重试")) }
             }
         loadingClasses.remove(course.kchId)
     }
@@ -888,12 +902,12 @@ fun JwxtSelectionScreen(
                         working = true
                         scope.launch {
                             val message = runCatching { c.createTask(course, klass) }
-                                .fold({ it.message }, { it.message ?: "创建抢课任务失败" })
+                                .fold({ it.message }, { jwxtDataMessage(it, "创建抢课任务失败，请稍后重试") })
                             snackbar.showSnackbar(message)
                             working = false
                         }
                     },
-                ) { Text("创建") }
+                ) { Text("创建任务") }
             },
             dismissButton = {
                 TextButton(onClick = { pendingTask = null }) { Text("取消") }
@@ -1151,7 +1165,7 @@ private fun TeachingClassRow(
             )
             if (grabTaskAvailable) {
                 Spacer(Modifier.width(6.dp))
-                FilledTonalButton(onClick = onCreateTask) { Text("抢课任务") }
+                FilledTonalButton(onClick = onCreateTask) { Text("创建抢课任务") }
             }
         }
     }
@@ -1231,6 +1245,7 @@ fun JwxtTasksScreen(
     refreshToken: Int,
     onBack: () -> Unit,
     onOpenWeb: () -> Unit,
+    onOpenSelection: () -> Unit,
     modifier: Modifier = Modifier,
     grabLoginContent: (@Composable () -> Unit)? = null,
 ) {
@@ -1257,11 +1272,11 @@ fun JwxtTasksScreen(
         state = try {
             DataState.Ready(c.fetchTasks())
         } catch (e: JwxtSessionExpiredException) {
-            DataState.Failed(e.message ?: "登录状态已失效")
+            DataState.Failed("登录状态已失效，请重新登录")
         } catch (e: JwxtException) {
-            DataState.Failed(e.message ?: "读取抢课任务失败")
+            DataState.Failed(jwxtDataMessage(e, "读取抢课任务失败，请稍后重试"))
         } catch (e: Exception) {
-            DataState.Failed("读取抢课任务失败：${e.message ?: "未知错误"}")
+            DataState.Failed(jwxtDataMessage(e, "读取抢课任务失败，请稍后重试"))
         } finally {
             refreshing = false
         }
@@ -1330,13 +1345,14 @@ fun JwxtTasksScreen(
                             cancelingId = task.id
                             scope.launch {
                                 val message = runCatching { c.cancelTask(task.id) }
-                                    .fold({ it.message }, { it.message ?: "取消任务失败" })
+                                    .fold({ it.message }, { jwxtDataMessage(it, "取消任务失败，请稍后重试") })
                                 snackbar.showSnackbar(message)
                                 cancelingId = null
                                 load()
                             }
                         },
                         onOpenDetail = { detailTask = it },
+                        onOpenSelection = onOpenSelection,
                     )
                 }
             }
@@ -1370,6 +1386,7 @@ private fun TaskList(
     cancelingId: Int?,
     onCancel: (GrabTaskInfo) -> Unit,
     onOpenDetail: (GrabTaskInfo) -> Unit,
+    onOpenSelection: () -> Unit,
 ) {
     var statusFilter by remember { mutableStateOf("all") }
     if (tasks.isEmpty()) {
@@ -1394,10 +1411,12 @@ private fun TaskList(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "在「选课」里展开已满的教学班，点「抢课任务」即可创建。",
+                text = "在选课页为满员课程创建任务",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onOpenSelection) { Text("去选课") }
         }
         return
     }
@@ -1434,7 +1453,7 @@ private fun TaskList(
         ) {
             item {
                 Text(
-                    text = "共 ${visible.size} 条任务 · 点右上角刷新",
+                    text = "共 ${visible.size} 个任务",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1560,7 +1579,7 @@ private fun taskStatusLabel(status: String): String = when (status) {
     "failed" -> "失败"
     "cancelled" -> "已取消"
     "expired" -> "已过期"
-    else -> status.ifBlank { "未知" }
+    else -> "状态未知"
 }
 
 @Composable
@@ -1773,7 +1792,7 @@ fun JwxtHubScreen(
                 },
                 actions = {
                     IconButton(onClick = onOpenWeb) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在网页中打开")
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在浏览器打开")
                     }
                 },
             )
@@ -1820,8 +1839,8 @@ fun JwxtHubScreen(
                         )
                         Text(
                             text = when (access.source) {
-                                JwxtSource.Official -> "直接调用教务接口，数据与网页版一致"
-                                JwxtSource.Grab -> "课表、成绩与选课数据由抢课助手提供"
+                                JwxtSource.Official -> "使用教务系统账号读取数据"
+                                JwxtSource.Grab -> "使用抢课助手读取课表、成绩与选课数据"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1841,7 +1860,7 @@ fun JwxtHubScreen(
             HubEntry(Icons.Outlined.HowToReg, "选课", "查询课程、选课与退课", onOpenSelection)
             if (access.source == JwxtSource.Grab) {
                 Spacer(Modifier.height(10.dp))
-                HubEntry(Icons.Outlined.Bolt, "抢课任务", "课满时自动蹲余量", onOpenTasks)
+                HubEntry(Icons.Outlined.Bolt, "抢课任务", "课程满员后自动等待名额", onOpenTasks)
             }
 
             Spacer(Modifier.height(18.dp))

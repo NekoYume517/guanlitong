@@ -147,7 +147,7 @@ fun SdgyXbcScreen(
         scannerOpen = false
         val c = bikeCodeOf(raw)
         if (c == null) {
-            unlockMsg = "未识别到有效车牌（需含 code 参数）"
+            unlockMsg = "没识别到车辆二维码，请重新扫码"
             return
         }
         readTokenNow { fresh ->
@@ -170,7 +170,12 @@ fun SdgyXbcScreen(
             Thread {
                 val result = callUnlock(token, code, lat, lng, if (ownerId > 0) ownerId else null)
                 main.post {
-                    unlockMsg = if (result == "OK") "开锁成功" else "开锁失败：${result ?: "网络/服务器"}"
+                    unlockMsg = when {
+                        result == "OK" -> "开锁成功"
+                        result == null -> "开锁失败，请检查网络后重试"
+                        result.startsWith("HTTP ") -> "开锁失败，请稍后重试"
+                        else -> "开锁失败：$result"
+                    }
                     if (result == "OK") {
                         main.postDelayed({ webRef?.reload() }, 800)
                     }
@@ -359,7 +364,7 @@ fun SdgyXbcScreen(
                         onUnlock = {
                             when {
                                 token.isBlank() -> unlockMsg = "尚未登录，请先在地图页登录"
-                                !armed -> { armed = true; unlockMsg = "请再次点击确认" }
+                                !armed -> { armed = true; unlockMsg = "再次确认将立即开锁" }
                                 !locationOk -> locationRequester(
                                     Manifest.permission.ACCESS_FINE_LOCATION)
                                 else -> { armed = false; unlockNow() }
@@ -509,7 +514,7 @@ private fun ConfirmPage(
             shape = RoundedCornerShape(18.dp),
         ) {
             Text(
-                if (armed) "再次点击确认开锁" else "确认开锁",
+                "确认开锁",
                 style = MaterialTheme.typography.labelLarge,
             )
         }

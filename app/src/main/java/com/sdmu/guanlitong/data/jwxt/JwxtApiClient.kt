@@ -339,7 +339,7 @@ class JwxtApiClient(
                 referer = menuReferer,
             )
             parseOperation(text, "选课")
-        }.getOrElse { OperationResult(false, it.message ?: "选课失败") }
+        }.getOrElse { OperationResult(false, operationErrorMessage(it, "选课失败，请稍后重试")) }
     }
 
     suspend fun drop(
@@ -378,7 +378,7 @@ class JwxtApiClient(
                 referer = menuReferer,
             )
             parseOperation(text, "退课")
-        }.getOrElse { OperationResult(false, it.message ?: "退课失败") }
+        }.getOrElse { OperationResult(false, operationErrorMessage(it, "退课失败，请稍后重试")) }
     }
 
     // ── 选课入口参数 ────────────────────────────────────────
@@ -574,7 +574,7 @@ class JwxtApiClient(
         } catch (e: JwxtException) {
             throw e
         } catch (e: IOException) {
-            throw JwxtException("无法连接教务系统：${e.message ?: "网络错误"}")
+            throw JwxtException("无法连接教务系统，请检查网络后重试")
         } finally {
             connection.disconnect()
         }
@@ -633,6 +633,14 @@ class JwxtApiClient(
     }
 
     companion object {
+        private fun operationErrorMessage(error: Throwable, fallback: String): String = when (error) {
+            is JwxtSessionExpiredException -> "登录状态已失效，请重新登录"
+            is JwxtException -> error.message
+                ?.takeUnless { it.isBlank() || it.contains("HTTP") }
+                ?: fallback
+            else -> "操作失败，请检查网络后重试"
+        }
+
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"

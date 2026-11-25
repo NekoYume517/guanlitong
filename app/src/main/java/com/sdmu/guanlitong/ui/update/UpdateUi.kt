@@ -30,7 +30,7 @@ sealed interface UpdateState {
     data class Available(val info: UpdateInfo) : UpdateState
     data class Downloading(val info: UpdateInfo, val downloaded: Long, val total: Long) : UpdateState
     data class Ready(val info: UpdateInfo, val apk: File, val needsPermission: Boolean) : UpdateState
-    data class Failed(val message: String) : UpdateState
+    data class Failed(val message: String, val downloadFailure: Boolean = false) : UpdateState
 }
 
 /**
@@ -69,7 +69,7 @@ fun UpdateDialog(
                         }
                     }
                     Text(
-                        text = "安装包 ${formatSize(state.info.apkSize)} · 来自 GitHub Releases",
+                        text = "安装包 ${formatSize(state.info.apkSize)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -127,15 +127,16 @@ fun UpdateDialog(
                 text = {
                     Text(
                         text = if (canInstall) {
-                            "安装包已下载到本地缓存。点「安装」交给系统安装器，安装时会覆盖当前版本，账号与设置都会保留。"
+                            "安装会覆盖当前版本，账号与设置都会保留。"
                         } else {
-                            "Android 要求你允许本应用安装更新包。点「安装」会打开系统的「安装未知应用」开关，" +
-                                "允许「管院通」之后回到这里再点一次即可。"
+                            "允许「管院通」安装应用后，回到这里继续。"
                         },
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = onInstall) { Text("安装") }
+                    TextButton(onClick = onInstall) {
+                        Text(if (canInstall) "安装" else "去设置")
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = onDismiss) { Text("稍后") }
@@ -143,18 +144,11 @@ fun UpdateDialog(
             )
         }
 
-        is UpdateState.UpToDate -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("已是最新版本") },
-            text = { Text("当前版本已经是 GitHub 上最新的正式 Release。") },
-            confirmButton = {
-                TextButton(onClick = onDismiss) { Text("好") }
-            },
-        )
+        is UpdateState.UpToDate -> Unit
 
         is UpdateState.Failed -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("更新失败") },
+            title = { Text(if (state.downloadFailure) "下载失败" else "检查更新失败") },
             text = { Text(state.message) },
             confirmButton = {
                 TextButton(onClick = onRetry) { Text("重试") }
@@ -171,12 +165,13 @@ fun UpdateDialog(
 /** 更新入口那一行的副标题：顺手把检查/下载状态显示出来。 */
 fun updateStatusText(state: UpdateState, currentVersion: String): String = when (state) {
     is UpdateState.Idle -> "当前版本 $currentVersion"
-    is UpdateState.Checking -> "正在从 GitHub 检查…"
+    is UpdateState.Checking -> "正在检查更新…"
     is UpdateState.UpToDate -> "已是最新版本 $currentVersion"
-    is UpdateState.Available -> "发现新版本 ${state.info.version}，点按查看"
+    is UpdateState.Available -> "发现新版本 ${state.info.version}"
     is UpdateState.Downloading -> "正在下载 ${state.info.version}…"
-    is UpdateState.Ready -> "新版本 ${state.info.version} 已下载，点按安装"
-    is UpdateState.Failed -> "检查失败：${state.message}"
+    is UpdateState.Ready -> "新版本 ${state.info.version} 已下载，等待安装"
+    is UpdateState.Failed ->
+        (if (state.downloadFailure) "下载失败：" else "检查更新失败：") + state.message
 }
 
 private fun formatSize(bytes: Long): String {

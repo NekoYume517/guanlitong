@@ -108,20 +108,23 @@ object ZcdParser {
         return weeks.toList()
     }
 
-    /** 把周次列表压缩成 "1-3,5,7-16" 形式。 */
+    /** 把周次列表压缩成 "1-4,6-8,10" 形式；连续单双周保留标注。 */
     fun describe(weeks: List<Int>): String {
         if (weeks.isEmpty()) return ""
         val sorted = weeks.distinct().sorted()
+
+        // 1,3,5,7 这类单双周如果拉成 1-7 会误导，补上（单）/（双）。
+        if (sorted.size > 2 && sorted.zipWithNext().all { (a, b) -> b - a == 2 }) {
+            val parity = if (sorted.first() % 2 == 0) "双" else "单"
+            return "${sorted.first()}-${sorted.last()}($parity)"
+        }
+
         val parts = mutableListOf<String>()
         var i = 0
         while (i < sorted.size) {
             var j = i
             while (j + 1 < sorted.size && sorted[j + 1] == sorted[j] + 1) j++
-            parts += when {
-                j == i -> "${sorted[i]}"
-                j == i + 1 -> "${sorted[i]},${sorted[j]}"
-                else -> "${sorted[i]}-${sorted[j]}"
-            }
+            parts += if (j == i) "${sorted[i]}" else "${sorted[i]}-${sorted[j]}"
             i = j + 1
         }
         return parts.joinToString(",")

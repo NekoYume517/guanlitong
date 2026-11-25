@@ -154,7 +154,7 @@ fun AccountScreen(
 
             if (serviceUrl.isBlank()) {
                 WarningCard(
-                    text = "尚未配置该服务的地址，请到「我的 → 应用设置 → 服务地址」中填写。",
+                    text = "这个服务暂时不可用。",
                 )
             }
 
@@ -359,7 +359,7 @@ private fun JwxtSourceSection(
         }
 
         Text(
-            text = "切换后，课表、成绩、考试和选课都会改用所选来源的数据；两种来源各自保存登录状态。",
+            text = "切换后，课表、成绩等数据会从所选来源读取。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -468,7 +468,7 @@ private fun CredentialSection(
             )
             Spacer(modifier = Modifier.width(10.dp))
         }
-        Text(if (loading) "正在登录…" else "登录")
+        Text("登录")
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -515,7 +515,7 @@ private fun WebSection(
             service.id != "jwxt" ->
                 "该服务使用学校统一身份认证，请在内嵌网页里完成登录。"
             nativeLoginAvailable ->
-                "上方可以用学号密码直接登录（验证码自动识别）；也可以打开网页继续使用成绩、选课等功能。两种方式共用同一份登录态。"
+                "可以用学号密码直接登录，验证码会自动识别；也可以打开网页登录。"
             else ->
                 "当前数据来源是抢课助手。官方教务网页仍可单独打开；抢课助手账号在上方「数据来源 → 抢课助手」里直接登录。"
         },
@@ -535,7 +535,7 @@ private fun WebSection(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("查看原生课表")
+            Text("查看课表")
         }
     }
 

@@ -82,7 +82,13 @@ import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.Timetable
 import com.sdmu.guanlitong.data.jwxt.WeekInfo
+import com.sdmu.guanlitong.data.jwxt.ZcdParser
 import com.sdmu.guanlitong.data.jwxt.parseWeekStart
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import com.sdmu.guanlitong.data.sdgy.SdgyClassmate
 import com.sdmu.guanlitong.data.sdgy.SdgyCourseSupplement
 import com.sdmu.guanlitong.data.sdgy.SdgyRepository
 import com.sdmu.guanlitong.data.sdgy.SdgyTimetableSource
@@ -181,29 +187,29 @@ fun JwxtScreen(
         try {
             when {
                 origin.isBlank() -> {
-                    state = fallbackState("还没有配置${access.source.label}地址，当前显示山管app课表")
-                        ?: TimetableState.Failed("还没有配置${access.source.label}地址", false)
+                    state = fallbackState("还没配置${access.source.label}地址，下面是山管 App 课表")
+                        ?: TimetableState.Failed("还没配置${access.source.label}地址", false)
                 }
 
                 cookie.isBlank() -> {
                     val notice = when {
                         cachedState?.fromSdgy == true ->
-                            "尚未登录${if (usingGrab) "抢课助手" else "教务系统"}，当前显示山管app课表"
-                        usingGrab -> "尚未登录抢课助手，当前显示上次缓存"
-                        else -> "尚未登录教务系统，当前显示上次缓存"
+                            "还没登录${if (usingGrab) "抢课助手" else "教务系统"}，下面是山管 App 课表"
+                        usingGrab -> "还没登录抢课助手，下面是上次加载的课表"
+                        else -> "还没登录教务系统，下面是上次加载的课表"
                     }
                     state = cachedState?.copy(
                         fromCache = true,
                         needsLogin = true,
                         notice = notice,
                     ) ?: fallbackState(
-                        "尚未登录${if (usingGrab) "抢课助手" else "教务系统"}，当前显示山管app课表",
+                        "还没登录${if (usingGrab) "抢课助手" else "教务系统"}，下面是山管 App 课表",
                         needsLogin = true,
                     ) ?: TimetableState.Failed(
                         if (usingGrab) {
-                            "尚未登录抢课助手，请先在「教务系统 → 数据来源」里登录"
+                            "还没登录抢课助手，先到「教务系统 → 数据来源」登录"
                         } else {
-                            "尚未登录教务系统，请先在网页中完成登录"
+                            "还没登录教务系统，登录后就能看课表"
                         },
                         true,
                     )
@@ -222,39 +228,41 @@ fun JwxtScreen(
                         )
                     } catch (e: JwxtSessionExpiredException) {
                         val notice = if (cachedState?.fromSdgy == true) {
-                            "登录状态已失效，当前显示山管app课表"
+                            "登录已失效，下面是山管 App 课表"
                         } else {
-                            "登录状态已失效，当前显示上次缓存"
+                            "登录已失效，下面是上次加载的课表"
                         }
                         cachedState?.copy(
                             fromCache = true,
                             needsLogin = true,
                             notice = notice,
-                        ) ?: fallbackState("登录状态已失效，当前显示山管app课表", needsLogin = true)
-                            ?: TimetableState.Failed(e.message ?: "登录状态已失效", true)
+                        ) ?: fallbackState("登录已失效，下面是山管 App 课表", needsLogin = true)
+                            ?: TimetableState.Failed("登录已失效，重新登录后就能看课表", true)
                     } catch (e: JwxtException) {
+                        val reason = jwxtFailureMessage(e)
                         val notice = if (cachedState?.fromSdgy == true) {
-                            "${e.message ?: "刷新失败"}，当前显示山管app课表"
+                            "$reason，下面是山管 App 课表"
                         } else {
-                            e.message ?: "刷新失败，当前显示上次缓存"
+                            "$reason，下面是上次加载的课表"
                         }
                         cachedState?.copy(
                             fromCache = true,
                             notice = notice,
-                        ) ?: fallbackState("${e.message ?: "刷新失败"}，当前显示山管app课表")
-                            ?: TimetableState.Failed(e.message ?: "读取课表失败", false)
+                        ) ?: fallbackState("$reason，下面是山管 App 课表")
+                            ?: TimetableState.Failed(reason, false)
                     } catch (e: Exception) {
+                        val reason = jwxtFailureMessage(e)
                         val notice = if (cachedState?.fromSdgy == true) {
-                            "读取课表失败：${e.message ?: "未知错误"}，当前显示山管app课表"
+                            "$reason，下面是山管 App 课表"
                         } else {
-                            "读取课表失败：${e.message ?: "未知错误"}，当前显示上次缓存"
+                            "$reason，下面是上次加载的课表"
                         }
                         cachedState?.copy(
                             fromCache = true,
                             notice = notice,
                         ) ?: fallbackState(
-                            "读取课表失败：${e.message ?: "未知错误"}，当前显示山管app课表",
-                        ) ?: TimetableState.Failed("读取课表失败：${e.message ?: "未知错误"}", false)
+                            "$reason，下面是山管 App 课表",
+                        ) ?: TimetableState.Failed(reason, false)
                     }
                 }
             }
@@ -287,7 +295,7 @@ fun JwxtScreen(
                     IconButton(onClick = onOpenWeb) {
                         Icon(
                             Icons.AutoMirrored.Outlined.OpenInNew,
-                            contentDescription = "在网页中打开",
+                            contentDescription = "在浏览器打开",
                         )
                     }
                 },
@@ -304,7 +312,7 @@ fun JwxtScreen(
                 is TimetableState.Failed -> FailedView(
                     message = current.message,
                     sessionExpired = current.sessionExpired,
-                    loginLabel = if (usingGrab) "登录抢课助手" else "直接登录",
+                    loginTitle = if (usingGrab) "抢课助手" else "教务系统",
                     onNativeLogin = openLogin,
                     onOpenWeb = onOpenWeb,
                     onRetry = { attempt++ },
@@ -351,7 +359,7 @@ private fun LoadingView() {
             CircularProgressIndicator()
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "正在从教务系统读取课表…",
+                text = "正在加载课表…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -363,7 +371,7 @@ private fun LoadingView() {
 private fun FailedView(
     message: String,
     sessionExpired: Boolean,
-    loginLabel: String,
+    loginTitle: String,
     onNativeLogin: () -> Unit,
     onOpenWeb: () -> Unit,
     onRetry: () -> Unit,
@@ -391,7 +399,7 @@ private fun FailedView(
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = if (sessionExpired) "需要登录教务系统" else "课表读取失败",
+                    text = if (sessionExpired) "需要登录$loginTitle" else "课表没加载出来",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -403,29 +411,35 @@ private fun FailedView(
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = onNativeLogin,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        Icons.Outlined.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(loginLabel)
-                }
-                TextButton(onClick = onOpenWeb, modifier = Modifier.fillMaxWidth()) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("改用网页登录")
-                }
-                TextButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
-                    Text("重试")
+                if (sessionExpired) {
+                    Button(
+                        onClick = onNativeLogin,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Outlined.CalendarMonth,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (loginTitle == "抢课助手") "登录抢课助手" else "登录教务系统")
+                    }
+                    TextButton(onClick = onOpenWeb, modifier = Modifier.fillMaxWidth()) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("网页登录")
+                    }
+                } else {
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("重试")
+                    }
                 }
             }
         }
@@ -491,9 +505,10 @@ private fun TimetableContent(
             Spacer(Modifier.height(8.dp))
         }
 
-        SemesterCard(
+        SemesterHeader(
             timetable = timetable,
-            courseCount = weekCourses.map { it.name }.distinct().size,
+            selectedWeek = selectedWeek,
+            currentWeek = timetable.currentWeek,
         )
 
         if (hasWeeks) {
@@ -517,7 +532,11 @@ private fun TimetableContent(
 
         if (weekCourses.isEmpty()) {
             Text(
-                text = if (hasWeeks) "本周没有排课" else "本学期暂无课程数据",
+                text = if (hasWeeks) {
+                    if (selectedWeek == timetable.currentWeek) "本周没有课" else "第 $selectedWeek 周没有课"
+                } else {
+                    "本学期还没有课程"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -540,50 +559,50 @@ private fun TimetableContent(
     }
 }
 
+/** 课表顶部只保留学期和当前周次，不再占用一整张卡片。 */
 @Composable
-private fun SemesterCard(
+private fun SemesterHeader(
     timetable: Timetable,
-    courseCount: Int,
+    selectedWeek: Int,
+    currentWeek: Int,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
-        modifier = Modifier.fillMaxWidth(),
+    val weekLabel = when {
+        selectedWeek <= 0 -> null
+        selectedWeek == currentWeek -> "本周"
+        else -> "第 $selectedWeek 周"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = semesterLabel(timetable.xnm, timetable.xqm),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                val student = listOf(timetable.studentName, timetable.studentId)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" · ")
-                if (student.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = student,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
-                    )
-                }
-            }
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+        Icon(
+            imageVector = Icons.Outlined.School,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = semesterLabel(timetable.xnm, timetable.xqm),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (weekLabel != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(
-                    text = "本周 $courseCount 门课",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    text = weekLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
@@ -622,31 +641,35 @@ private fun CacheNotice(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = notice ?: if (fromSdgy) {
-                        "教务系统暂无数据，当前显示山管app课表"
+                        "教务系统没有课表，下面是山管 App 课表"
                     } else {
-                        "当前显示本地缓存的课表"
+                        "下面是上次加载的课表"
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Text(
-                    text = buildString {
-                        if (fromSdgy) {
-                            append("数据来自山管app课表")
-                        } else {
-                            append("更新于 ")
-                            append(formatUpdatedAt(updatedAt))
-                        }
-                        if (refreshing) append(" · 正在更新…")
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
-                )
+                val meta = buildString {
+                    if (updatedAt > 0L) {
+                        append("更新于 ")
+                        append(formatUpdatedAt(updatedAt))
+                    }
+                    if (refreshing) {
+                        if (isNotEmpty()) append(" · ")
+                        append("正在刷新…")
+                    }
+                }
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
+                    )
+                }
             }
             if (!refreshing) {
                 TextButton(
                     onClick = if (needsLogin) onNativeLogin else onRetry,
                 ) {
-                    Text(if (needsLogin) "登录" else "更新")
+                    Text(if (needsLogin) "登录" else "刷新")
                 }
             }
         }
@@ -654,8 +677,8 @@ private fun CacheNotice(
 }
 
 private fun formatUpdatedAt(timestamp: Long): String {
-    if (timestamp <= 0L) return "未知时间"
-    return SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+    if (timestamp <= 0L) return "时间未知"
+    return SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(timestamp))
 }
 
 @Composable
@@ -932,7 +955,7 @@ private fun DayColumn(
                     )
                     if (compact && course.room.isNotBlank() && span >= 2) {
                         Text(
-                            text = "@${course.room}",
+                            text = course.room,
                             fontSize = 7.sp,
                             lineHeight = 8.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -942,7 +965,7 @@ private fun DayColumn(
                     }
                     if (!compact && course.room.isNotBlank()) {
                         Text(
-                            text = "@${course.room}",
+                            text = course.room,
                             fontSize = 8.sp,
                             lineHeight = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -976,7 +999,8 @@ private fun CourseDetailDialog(
     val context = LocalContext.current
     val repository = remember { SdgyRepository(context) }
     var supplement by remember(course.name, week) { mutableStateOf<SdgyCourseSupplement?>(null) }
-    var showNames by remember { mutableStateOf(false) }
+    // null=关闭，"classmates"=上课人，"scores"=最高分名单
+    var showNames by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(course.name, course.dayOfWeek, course.startPeriod, course.endPeriod, week) {
         supplement = SdgyTimetableSource.loadSupplement(
@@ -1003,8 +1027,11 @@ private fun CourseDetailDialog(
         start.isNotBlank() -> "从 $start 开始"
         else -> ""
     }
-    val weekText = course.rawWeeks.ifBlank {
-        if (course.weeksDesc.isBlank()) "" else "第 ${course.weeksDesc} 周"
+    val weekText = when {
+        course.weeksDesc.isNotBlank() -> "第 ${course.weeksDesc} 周"
+        course.weeks.isNotEmpty() -> "第 ${ZcdParser.describe(course.weeks.toList())} 周"
+        course.rawWeeks.isNotBlank() -> "第 ${course.rawWeeks} 周"
+        else -> ""
     }
 
     AlertDialog(
@@ -1031,56 +1058,105 @@ private fun CourseDetailDialog(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    DetailRow("挂科率", s.failureRate)
-                    DetailRow("平均分", s.average)
-                    DetailRow("最高分", s.highest)
-                    DetailRow("上课人数", s.studentCount)
-                    if (s.genderRatio != "--") DetailRow("男女比例", s.genderRatio)
-                    if (s.classmates.isNotEmpty()) {
-                        TextButton(
-                            onClick = { showNames = true },
-                            contentPadding = PaddingValues(0.dp),
-                        ) {
-                            Text("上课人（${s.classmates.size}）")
+                    // 统计信息两列排布，避免详情弹窗被拉得过长。
+                    StatRow(
+                        "挂科率" to s.failureRate,
+                        "平均分" to s.average,
+                    )
+                    StatRow(
+                        "历史最高分" to s.highest,
+                        "最高分未及格" to withUnit(s.maxFailCount, "人"),
+                    )
+                    StatRow(
+                        "上课人数" to withUnit(s.studentCount, "人"),
+                        "男/女" to s.genderRatio,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (s.classmates.isNotEmpty()) {
+                            TextButton(
+                                onClick = { showNames = "classmates" },
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text("学生名单 ${s.classmates.size} 人", maxLines = 1)
+                            }
+                        }
+                        if (s.topScorers.isNotEmpty()) {
+                            TextButton(
+                                onClick = { showNames = "scores" },
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text("最高分名单 ${s.topScorers.size} 人", maxLines = 1)
+                            }
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("知道了") }
+            TextButton(onClick = onDismiss) { Text("关闭") }
         },
     )
 
-    if (showNames) {
+    if (showNames != null) {
         supplement?.let { s ->
-            SdgyNameListDialog(names = s.classmates, onDismiss = { showNames = false })
+            val scores = showNames == "scores"
+            SdgyNameListDialog(
+                title = if (scores) {
+                    "最高分名单（${s.topScorers.size} 人）"
+                } else {
+                    "学生名单（${s.classmates.size} 人）"
+                },
+                names = if (scores) s.topScorers else s.classmates,
+                highlight = if (scores) s.topScore else "",
+                onDismiss = { showNames = null },
+            )
         }
     }
 }
 
 @Composable
 private fun SdgyNameListDialog(
-    names: List<Pair<String, String>>,
+    title: String,
+    names: List<SdgyClassmate>,
+    highlight: String,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("上课人（${names.size}）") },
+        title = { Text(title) },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                items(names) { (name, id) ->
+                items(names) { classmate ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        if (id.isNotBlank()) {
-                            Text(
-                                id,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Text(
+                            classmate.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            val detail = listOfNotNull(
+                                classmate.sex.takeIf { it.isNotBlank() },
+                                classmate.className.takeIf { it.isNotBlank() },
+                                classmate.studentId.takeIf { it.isNotBlank() },
+                            ).joinToString(" · ")
+                            if (detail.isNotBlank()) {
+                                Text(
+                                    detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (highlight.isNotBlank()) {
+                                Text(
+                                    "$highlight 分",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -1107,6 +1183,39 @@ private fun DetailRow(label: String, value: String) {
         )
     }
 }
+
+/** 课程统计的两列单元格：左侧标签，右侧数值。 */
+@Composable
+private fun StatRow(vararg cells: Pair<String, String>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        cells.forEach { (label, value) ->
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        // 只有一列时占住另一半，保持两列对齐。
+        if (cells.size == 1) Spacer(Modifier.weight(1f))
+    }
+}
+
+private fun withUnit(value: String, unit: String): String =
+    if (value.isBlank() || value == "--") "--" else "$value $unit"
 
 // ── 布局工具 ──────────────────────────────────────────────
 
@@ -1174,6 +1283,17 @@ private fun semesterLabel(xnm: String, xqm: String): String {
 }
 
 private val WEEKDAYS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+private fun jwxtFailureMessage(error: Throwable): String = when {
+    error is JwxtSessionExpiredException -> "登录已失效，重新登录后就能看课表"
+    error is UnknownHostException || error is ConnectException -> "网络连接失败，请检查网络"
+    error is SocketTimeoutException -> "连接超时，请检查网络"
+    error is IOException -> "网络连接失败，请检查网络"
+    error is JwxtException -> error.message
+        ?.takeUnless { it.isBlank() || it.contains("HTTP") }
+        ?: "请稍后再试"
+    else -> "请稍后再试"
+}
 
 private val COURSE_COLORS = listOf(
     Color(0xFF4F7CF7),

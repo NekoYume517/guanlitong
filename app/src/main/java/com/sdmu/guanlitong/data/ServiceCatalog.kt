@@ -33,7 +33,7 @@ object ServiceCatalog {
         ),
         SchoolService(
             id = "sdgy",
-            name = "山管app",
+            name = "山管 App",
             summary = "移动校园 · 统一身份认证",
             defaultUrl = "http://222.206.86.42:8081",
             loginMode = LoginMode.CREDENTIAL,

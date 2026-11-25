@@ -116,5 +116,9 @@ fun countdownLabel(item: UpcomingClass): String = when {
     item.minutesUntil == null -> "待上课"
     item.minutesUntil <= 0L -> "马上开始"
     item.minutesUntil < 60L -> "${item.minutesUntil} 分钟后"
-    else -> "还有 ${item.minutesUntil / 60} 小时 ${item.minutesUntil % 60} 分"
+    else -> {
+        val hours = item.minutesUntil / 60
+        val minutes = item.minutesUntil % 60
+        if (minutes == 0L) "还有 $hours 小时" else "还有 $hours 小时 $minutes 分"
+    }
 }

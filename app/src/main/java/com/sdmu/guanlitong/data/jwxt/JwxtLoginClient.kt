@@ -145,7 +145,7 @@ class JwxtLoginClient(serviceUrl: String = JwxtOrigin.LOGIN_URL) {
                 }
                 JwxtLoginResult(
                     success = false,
-                    message = "登录失败：服务器跳转到了 ${location.ifBlank { "未知地址" }}",
+                    message = "登录失败，请检查账号、密码和验证码",
                 )
             }
 
@@ -153,7 +153,7 @@ class JwxtLoginClient(serviceUrl: String = JwxtOrigin.LOGIN_URL) {
 
             else -> JwxtLoginResult(
                 success = false,
-                message = "登录失败（HTTP ${response.code}）",
+                message = "登录失败，请稍后重试",
             )
         }
     }
@@ -278,7 +278,7 @@ class JwxtLoginClient(serviceUrl: String = JwxtOrigin.LOGIN_URL) {
         } catch (e: JwxtLoginException) {
             throw e
         } catch (e: IOException) {
-            throw JwxtLoginException("无法连接教务系统：${e.message ?: "网络错误"}")
+            throw JwxtLoginException("无法连接教务系统，请检查网络后重试")
         } finally {
             connection.disconnect()
         }

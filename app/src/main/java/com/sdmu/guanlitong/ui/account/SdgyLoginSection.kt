@@ -56,6 +56,7 @@ import com.sdmu.guanlitong.data.sdgy.SdgySession
 import com.sdmu.guanlitong.data.sdgy.SdgySessionManager
 import com.sdmu.guanlitong.data.sdgy.SdgySessionState
 import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
+import com.sdmu.guanlitong.ui.sdgy.sdgyMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -223,19 +224,15 @@ internal fun SdgyLoginSection(
                             )
                             sessionReady = saved
                             statusError = null
-                            message = if (saved) {
-                                "登录成功，官方山管 App 已被下线"
-                            } else {
-                                "已登录，但登录态保存失败，重启 App 后需要重新登录"
-                            }
+                            message = if (saved) "登录成功" else "已登录，但登录态保存失败，重启 App 后需要重新登录"
                             messageIsError = !saved
-                            toast(if (saved) "登录成功" else "登录成功，但登录态保存失败")
+                            if (!saved) toast("登录成功，但登录态保存失败")
                         } catch (e: SdgyPasswordResetException) {
                             resetUrl = e.resetUrl
                             message = "该账号需要先在官方山管 App 重置密码"
                             messageIsError = true
                         } catch (e: SdgyException) {
-                            message = e.message ?: "登录失败，请稍后再试"
+                            message = e.sdgyMessage()
                             messageIsError = true
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
@@ -254,7 +251,7 @@ internal fun SdgyLoginSection(
                                 messageIsError = true
                             }
                         } catch (e: Exception) {
-                            message = e.message ?: "登录失败，请稍后再试"
+                            message = e.sdgyMessage()
                             messageIsError = true
                         } finally {
                             loading = false
@@ -274,11 +271,7 @@ internal fun SdgyLoginSection(
                 Spacer(Modifier.width(10.dp))
             }
             Text(
-                when {
-                    loading -> "正在登录…"
-                    account.loggedIn -> "重新登录山管app"
-                    else -> "登录山管app"
-                },
+                if (account.loggedIn) "重新登录山管 App" else "登录山管 App",
             )
         }
 
@@ -393,15 +386,14 @@ private fun SdgyKickNotice() {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "登录会顶掉官方山管 App",
+                    text = "登录会退出官方山管 App",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "同一账号只允许一个会话。在管院通登录后，手机上的官方「山管」App 会被退出；" +
-                        "如果又在官方 App 登录，这里掉线后会用保存的密码自动重连。",
+                    text = "如果又在官方 App 登录，这里掉线后会用保存的密码自动重连。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )

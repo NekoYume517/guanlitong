@@ -43,10 +43,10 @@ object SdgyAppCatalog {
 
     /** 官方列表里没有、但我们做成了原生页面的工具。 */
     val nativeTools = listOf(
-        SdgyNativeTool(SdgyPage.Timetable, "山管课表", "按周查看 · 课程详情"),
+        SdgyNativeTool(SdgyPage.Timetable, "课表", "按周查看 · 课程详情"),
         SdgyNativeTool(SdgyPage.Pay, "一卡通付款码", "余额 · 付款码"),
         SdgyNativeTool(SdgyPage.Power, "宿舍用电", "剩余电量 · 近 14 天用量"),
-        SdgyNativeTool(SdgyPage.Shot, "请销假", "生成申请截图"),
+        SdgyNativeTool(SdgyPage.Shot, "请销假", "生成申请图片"),
     )
 
     /** 解析 `api/app/list` 解密后的 JSON；兼容正文直接是数组或对象包一层 DATA。 */
@@ -174,7 +174,7 @@ object SdgyAppCatalog {
                 nativePage = tool.page,
             )
         }
-        val nativeGroup = SdgyAppGroup("原生工具", apps)
+        val nativeGroup = SdgyAppGroup("常用工具", apps)
         val result = groups.toMutableList()
         val insertAt = if (result.firstOrNull()?.common == true) 1 else 0
         result.add(insertAt.coerceAtMost(result.size), nativeGroup)

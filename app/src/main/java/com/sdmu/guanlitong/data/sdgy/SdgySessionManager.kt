@@ -142,7 +142,7 @@ object SdgySessionManager {
                 if (e.code.isEmpty() || e.code.startsWith("5") || e.code == "0001") {
                     lastError = e
                 } else {
-                    val message = "自动登录被服务器拒绝：${e.message}；登录状态已保留"
+                    val message = "自动登录失败，请重新登录；登录状态已保留"
                     store.setError(message)
                     return SdgySessionCheck(SdgySessionState.WaitingRetry, message)
                 }
