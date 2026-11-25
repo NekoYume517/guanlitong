@@ -1,15 +1,22 @@
 package com.sdmu.guanlitong.data
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ElectricalServices
 import androidx.compose.material.icons.outlined.EventNote
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.HowToReg
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** 教务系统里的原生页面。 */
@@ -17,6 +24,9 @@ enum class JwxtPage { Timetable, Hub, Grades, Exams, Selection, Tasks }
 
 /** 山管app 内置的原生页面。 */
 enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
+
+/** 口袋校园内置的原生页面。 */
+enum class PuPage { Hub, Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
@@ -40,6 +50,9 @@ sealed interface FeatureAction {
 
     /** 山管app 内置原生页面。 */
     data class Sdgy(val page: SdgyPage) : FeatureAction
+
+    /** 口袋校园内置原生页面。 */
+    data class Pu(val page: PuPage) : FeatureAction
 
     /** 打开某个服务的网页；[url] 为空时用服务配置的地址。 */
     data class Web(val serviceId: String, val url: String? = null) : FeatureAction
@@ -76,6 +89,7 @@ val ServiceFeature.targetServiceId: String
         is FeatureAction.External -> action.serviceId
         is FeatureAction.Jwxt -> serviceId
         is FeatureAction.Sdgy -> serviceId
+        is FeatureAction.Pu -> serviceId
         is FeatureAction.SdgyApp -> serviceId
         FeatureAction.Timetable -> serviceId
     }
@@ -162,6 +176,70 @@ object FeatureCatalog {
             subtitle = "生成申请图片",
             icon = Icons.Outlined.EditNote,
             action = FeatureAction.Sdgy(SdgyPage.Shot),
+        ),
+ServiceFeature(
+            id = "pu.hub",
+            serviceId = "pu",
+            title = "活动中心",
+            subtitle = "报名 · 签到 · 学时",
+            icon = Icons.Outlined.Dashboard,
+            action = FeatureAction.Pu(PuPage.Hub),
+        ),
+        ServiceFeature(
+            id = "pu.activities",
+            serviceId = "pu",
+            title = "活动列表",
+            subtitle = "全部活动 · 搜索",
+            icon = Icons.Outlined.EventNote,
+            action = FeatureAction.Pu(PuPage.Activities),
+        ),
+        ServiceFeature(
+            id = "pu.mine",
+            serviceId = "pu",
+            title = "我的活动",
+            subtitle = "进行中 · 已结束",
+            icon = Icons.Outlined.History,
+            action = FeatureAction.Pu(PuPage.Mine),
+        ),
+        ServiceFeature(
+            id = "pu.credit",
+            serviceId = "pu",
+            title = "学时统计",
+            subtitle = "总量 · 按年聚合",
+            icon = Icons.Outlined.WorkspacePremium,
+            action = FeatureAction.Pu(PuPage.Credit),
+        ),
+        ServiceFeature(
+            id = "pu.friends",
+            serviceId = "pu",
+            title = "好友",
+            subtitle = "关注 · 粉丝 · 互关",
+            icon = Icons.Outlined.People,
+            action = FeatureAction.Pu(PuPage.Friends),
+        ),
+        ServiceFeature(
+            id = "pu.personalcode",
+            serviceId = "pu",
+            title = "我的二维码",
+            subtitle = "个人码 · 10s 换码",
+            icon = Icons.Outlined.QrCode2,
+            action = FeatureAction.Pu(PuPage.PersonalCode),
+        ),
+        ServiceFeature(
+            id = "pu.scan",
+            serviceId = "pu",
+            title = "扫一扫",
+            subtitle = "签到码 · 个人码",
+            icon = Icons.Outlined.QrCodeScanner,
+            action = FeatureAction.Pu(PuPage.Scan),
+        ),
+        ServiceFeature(
+            id = "pu.signcode",
+            serviceId = "pu",
+            title = "生成签到码",
+            subtitle = "主办方 · 动态码",
+            icon = Icons.Outlined.AddBox,
+            action = FeatureAction.Pu(PuPage.SignCode),
         ),
     )
 

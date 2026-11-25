@@ -54,12 +54,14 @@ import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.SdgyPage
+import com.sdmu.guanlitong.data.PuPage
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtOrigin
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SessionRelogin
 import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
+import com.sdmu.guanlitong.data.pu.PuCredStore
 import com.sdmu.guanlitong.data.JwxtPage
 import com.sdmu.guanlitong.data.update.UpdateClient
 import com.sdmu.guanlitong.data.update.UpdateInfo
@@ -76,6 +78,15 @@ import com.sdmu.guanlitong.ui.jwxt.JwxtTasksScreen
 import com.sdmu.guanlitong.ui.mine.MineScreen
 import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
+import com.sdmu.guanlitong.ui.pu.PuActivitiesScreen
+import com.sdmu.guanlitong.ui.pu.PuActivityDetailScreen
+import com.sdmu.guanlitong.ui.pu.PuCreditScreen
+import com.sdmu.guanlitong.ui.pu.PuFriendsScreen
+import com.sdmu.guanlitong.ui.pu.PuHubScreen
+import com.sdmu.guanlitong.ui.pu.PuMineScreen
+import com.sdmu.guanlitong.ui.pu.PuPersonalCodeScreen
+import com.sdmu.guanlitong.ui.pu.PuScanScreen
+import com.sdmu.guanlitong.ui.pu.PuSignCodeScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyHubScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyPayScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyPowerScreen
@@ -94,6 +105,8 @@ private sealed interface Dest {
     data class Account(val serviceId: String) : Dest
     data class Jwxt(val page: JwxtPage = JwxtPage.Timetable) : Dest
     data class Sdgy(val page: SdgyPage = SdgyPage.Hub) : Dest
+    /** 口袋校园原生页面；[activityId] 非空表示在活动列表之上叠加活动详情。 */
+    data class Pu(val page: PuPage = PuPage.Hub, val activityId: Long? = null) : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(
         val title: String,
@@ -262,6 +275,8 @@ fun AppRoot(repository: AppRepository) {
 
             is FeatureAction.Sdgy -> goForward(Dest.Sdgy(action.page))
 
+            is FeatureAction.Pu -> goForward(Dest.Pu(action.page))
+
             is FeatureAction.SdgyApp -> {
                 val web = action.action
                 when {
@@ -426,6 +441,7 @@ fun AppRoot(repository: AppRepository) {
                                         CookieUtils.clearAll()
                                         JwxtCache.clear(context)
                                         SdgySessionStore(context).clear()
+                                        PuCredStore(context).clear()
                                     },
                                     jwxtSource = jwxtSource,
                                     versionName = currentVersion,
@@ -518,6 +534,47 @@ fun AppRoot(repository: AppRepository) {
                             SdgyPage.Power -> SdgyPowerScreen(onBack = { goBack() })
 
                             SdgyPage.Shot -> SdgyShotScreen(onBack = { goBack() })
+                        }
+
+                        is Dest.Pu -> when (dest.page) {
+                            PuPage.Hub -> PuHubScreen(
+                                onOpen = { goForward(Dest.Pu(it)) },
+                                onOpenAccount = { goForward(Dest.Account("pu")) },
+                            )
+
+                            PuPage.Activities -> if (dest.activityId != null) {
+                                PuActivityDetailScreen(
+                                    activityId = dest.activityId,
+                                    onBack = { goBack() },
+                                    onOpenSignCode = { goForward(Dest.Pu(PuPage.SignCode, it)) },
+                                )
+                            } else {
+                                PuActivitiesScreen(
+                                    onBack = { goBack() },
+                                    onOpenActivity = { goForward(Dest.Pu(PuPage.Activities, it)) },
+                                )
+                            }
+
+                            PuPage.Mine -> PuMineScreen(
+                                onBack = { goBack() },
+                                onOpenActivity = { goForward(Dest.Pu(PuPage.Activities, it)) },
+                            )
+
+                            PuPage.Credit -> PuCreditScreen(onBack = { goBack() })
+
+                            PuPage.Friends -> PuFriendsScreen(onBack = { goBack() })
+
+                            PuPage.PersonalCode -> PuPersonalCodeScreen(onBack = { goBack() })
+
+                            PuPage.Scan -> PuScanScreen(
+                                onBack = { goBack() },
+                                onOpenActivity = { goForward(Dest.Pu(PuPage.Activities, it)) },
+                            )
+
+                            PuPage.SignCode -> PuSignCodeScreen(
+                                onBack = { goBack() },
+                                initialActivityId = dest.activityId,
+                            )
                         }
 
                         is Dest.SdgyWeb -> SdgyWebScreen(

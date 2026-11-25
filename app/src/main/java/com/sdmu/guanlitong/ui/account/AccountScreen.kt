@@ -194,6 +194,12 @@ fun AccountScreen(
                     store = store,
                 )
 
+                service.id == "pu" -> PuLoginSection(
+                    service = service,
+                    account = account,
+                    store = store,
+                )
+
                 service.loginMode == LoginMode.CREDENTIAL -> CredentialSection(
                     username = username,
                     onUsernameChange = { username = it },
