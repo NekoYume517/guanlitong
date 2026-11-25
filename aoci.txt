@@ -1,0 +1,7 @@
+#AOCI-ROOT-MANIFEST: 1
+#Format-Version: cognition-volumes/v1
+#Locale: zh-CN
+#Project: 管院通是山东管理学院的非官方 Android 校园整合工具：用 Jetpack Compose 把官方教务、自建抢课助手、山管 app 与口袋校园四个服务的账号、数据与网页入口整合进一个应用，并提供桌面小组件、应用内更新和离线请销假编辑器。
+#Global-Invariants: 仓库文本统一以 LF 检出，AOCI 基线按原始字节比对；教务页面 GET 不得携带 X-Requested-With，否则网关返回 901；登录态以 WebView Cookie 为共享通道，原生与网页端共用；自动重登失败不得清除登录状态或已保存密码；发布包沿用调试证书，保证应用内更新可覆盖安装；JNI 桥 StringEncryptor 的包名、类名与方法名与 native 静态注册绑定，不可混淆。
+#Volume: id=meta kind=meta path=aoci.meta.txt format=meta-v1 depends=- state=enabled
+#Volume: id=code kind=code path=aoci.code.txt format=object-fras-v2 depends=meta state=enabled
