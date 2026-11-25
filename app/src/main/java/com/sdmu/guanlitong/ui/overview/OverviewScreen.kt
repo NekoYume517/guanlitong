@@ -1587,18 +1587,16 @@ private fun NextClassWidget(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = buildList {
-                        dayPrefix(next, today).takeIf { it.isNotBlank() }?.let(::add)
-                        next.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
-                        if (next.isOngoing) add(next.timeLabel) else add(countdownLabel(next))
-                    }.joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (needsLogin) "未登录 · 显示上次课表" else "课表更新至 ${formatUpdatedAt(snapshot.savedAt)}",
+                    // 小号卡片只有三行可放：未登录时把状态写在这一行，课表更新时间留给教务概览。
+                    text = if (needsLogin) {
+                        "未登录 · 显示上次课表"
+                    } else {
+                        buildList {
+                            dayPrefix(next, today).takeIf { it.isNotBlank() }?.let(::add)
+                            next.course.room.takeIf { it.isNotBlank() }?.let { add("@$it") }
+                            if (next.isOngoing) add(next.timeLabel) else add(countdownLabel(next))
+                        }.joinToString(" · ")
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
