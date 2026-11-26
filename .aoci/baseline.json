@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-25T16:25:23Z",
-  "updated_at": "2026-11-26T13:28:11Z",
+  "updated_at": "2026-11-26T13:39:33Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -29,9 +29,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "fcb0804d7a2f0b6d716b524557c4868923992747de4049250a2bee1443b598cf",
-      "size": 73871,
-      "normalized_sha256": "fcb0804d7a2f0b6d716b524557c4868923992747de4049250a2bee1443b598cf"
+      "sha256": "9bf1c0a9cee198d38f9e48210ef53652ed07ab1aec1c31a9489b4db9c2813d60",
+      "size": 74391,
+      "normalized_sha256": "9bf1c0a9cee198d38f9e48210ef53652ed07ab1aec1c31a9489b4db9c2813d60"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -191,9 +191,9 @@
     },
     "app/src/main/java/com/sdmu/guanlitong/data/cx/CxCredStore.kt": {
       "role": "index",
-      "sha256": "c2214dd389a29950d14623ed39302dd0b05bbf5f71a397a8647a2aa0f32cc5f4",
-      "size": 3107,
-      "normalized_sha256": "c2214dd389a29950d14623ed39302dd0b05bbf5f71a397a8647a2aa0f32cc5f4"
+      "sha256": "bcea50e1db6807a761bc8a1289b7bfc13cd7c464e2757f0141998722dcacec04",
+      "size": 3160,
+      "normalized_sha256": "bcea50e1db6807a761bc8a1289b7bfc13cd7c464e2757f0141998722dcacec04"
     },
     "app/src/main/java/com/sdmu/guanlitong/data/cx/CxLoginApi.kt": {
       "role": "index",
@@ -209,9 +209,9 @@
     },
     "app/src/main/java/com/sdmu/guanlitong/data/cx/CxRepository.kt": {
       "role": "index",
-      "sha256": "18827996e2a18634b4e8e1697f493557245b0c7b119edca5c40c1422875a6ce9",
-      "size": 1220,
-      "normalized_sha256": "18827996e2a18634b4e8e1697f493557245b0c7b119edca5c40c1422875a6ce9"
+      "sha256": "da20cbdf2ddff81eb1f81708941853d3c5d817f5484479422971538928269cd7",
+      "size": 5595,
+      "normalized_sha256": "da20cbdf2ddff81eb1f81708941853d3c5d817f5484479422971538928269cd7"
     },
     "app/src/main/java/com/sdmu/guanlitong/data/jwxt/CaptchaOcr.kt": {
       "role": "index",
@@ -431,9 +431,9 @@
     },
     "app/src/main/java/com/sdmu/guanlitong/ui/account/CxLoginSection.kt": {
       "role": "index",
-      "sha256": "7fb2ac4a3ab59d6366c5840657fec075f6572f4bc1af57dd4d6a0492dae68a1a",
-      "size": 8426,
-      "normalized_sha256": "7fb2ac4a3ab59d6366c5840657fec075f6572f4bc1af57dd4d6a0492dae68a1a"
+      "sha256": "195b6d7f38b6bed29c97f6d4b05636dad8ecd5e4736dd66f24cb1f65c4ebcd93",
+      "size": 10119,
+      "normalized_sha256": "195b6d7f38b6bed29c97f6d4b05636dad8ecd5e4736dd66f24cb1f65c4ebcd93"
     },
     "app/src/main/java/com/sdmu/guanlitong/ui/account/GrabLoginCard.kt": {
       "role": "index",
@@ -842,6 +842,12 @@
       "sha256": "535e1875faf2929f728912dc593772470a6cb89e15cd7f77fa38497e5ebb182d",
       "size": 6230,
       "normalized_sha256": "535e1875faf2929f728912dc593772470a6cb89e15cd7f77fa38497e5ebb182d"
+    },
+    "app/src/test/java/com/sdmu/guanlitong/data/cx/CxRepositoryTest.kt": {
+      "role": "index",
+      "sha256": "2e016d09acbb4fdf8e145afe8d88e8938f5532b45dd6b677dbd7a3d7be618feb",
+      "size": 8766,
+      "normalized_sha256": "2e016d09acbb4fdf8e145afe8d88e8938f5532b45dd6b677dbd7a3d7be618feb"
     },
     "app/src/test/java/com/sdmu/guanlitong/data/pu/ParseMidTest.kt": {
       "role": "index",
