@@ -16,7 +16,7 @@ import org.json.JSONObject
  * 注意：任何请求失败都不会调用 [clear]；只有用户在账号页点「退出登录」
  * 或「退出全部账号」才会真正清会话。
  */
-class CxCredStore(context: Context) {
+class CxCredStore(context: Context) : CxSessionStore {
 
     private val prefs: SharedPreferences = context.applicationContext
         .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -24,14 +24,14 @@ class CxCredStore(context: Context) {
     @Volatile
     private var cached: CxSession? = load()
 
-    val session: CxSession? get() = cached
+    override val session: CxSession? get() = cached
 
-    val phone: String? get() = cached?.phone?.takeIf { it.isNotBlank() }
+    override val phone: String? get() = cached?.phone?.takeIf { it.isNotBlank() }
 
     val loggedIn: Boolean
         get() = cached?.let { it.phone.isNotBlank() && it.cookies.isNotEmpty() } == true
 
-    fun save(session: CxSession) {
+    override fun save(session: CxSession) {
         cached = session
         val plain = runCatching { encode(session) }.getOrNull() ?: return
         val sealed = Secrets.encrypt(plain) ?: run {
@@ -41,7 +41,7 @@ class CxCredStore(context: Context) {
         prefs.edit().putString(KEY_SESSION, sealed).apply()
     }
 
-    fun clear() {
+    override fun clear() {
         cached = null
         prefs.edit().remove(KEY_SESSION).apply()
     }

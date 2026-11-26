@@ -3,6 +3,7 @@ package com.sdmu.guanlitong.ui.account
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -17,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.SchoolService
-import com.sdmu.guanlitong.data.cx.CxCredStore
 import com.sdmu.guanlitong.data.cx.CxRepository
 import com.sdmu.guanlitong.data.cx.cxMessage
 import com.sdmu.guanlitong.data.cx.maskPhone
@@ -43,10 +45,11 @@ import kotlinx.coroutines.launch
 /**
  * 「我的 → 学习通」账号区。
  *
- * 第一期只有手机号 + 密码登录：
- * - 密码不落盘，也不提供「记住密码」；
- * - 登录后只显示脱敏手机号与「退出登录」；
- * - 请求失败（含 401）不会清会话，只有用户主动退出才清。
+ * - 手机号 + 密码原生登录；
+ * - 「记住密码」默认不勾选：勾选后用 Android Keystore 加密保存，供登录过期时
+ *   自动重登；不勾选时登录成功即丢弃密码，取消勾选会立刻清掉本机密码；
+ * - 登录后只显示脱敏手机号与「退出登录」；请求失败（含 401）不会清会话或密码，
+ *   只有用户主动退出才一起清。
  */
 @Composable
 fun CxLoginSection(
@@ -59,10 +62,14 @@ fun CxLoginSection(
     val scope = rememberCoroutineScope()
     val sid = service.id
     val current = account ?: store.accountOf(sid)
-    val repo = remember(context) { CxRepository(context.applicationContext) }
+    val repo = remember(context, store) { CxRepository(context.applicationContext, store) }
+    val savedPassword = remember(sid) { repo.savedPassword }
 
     var phone by remember(sid) { mutableStateOf(repo.phone.orEmpty().ifBlank { current.username }) }
-    var password by remember(sid) { mutableStateOf("") }
+    var password by remember(sid) { mutableStateOf(savedPassword.orEmpty()) }
+    var rememberPassword by remember(sid) { mutableStateOf(savedPassword != null) }
+    // 已登录卡片的状态说明文案只取决于「本机是否还留着密码」，与表单开关分开记。
+    var remembered by remember(sid) { mutableStateOf(savedPassword != null) }
     var passwordVisible by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -76,6 +83,12 @@ fun CxLoginSection(
         messageIsError = true
     }
 
+    fun forget() {
+        repo.forgetPassword()
+        rememberPassword = false
+        remembered = false
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -86,12 +99,13 @@ fun CxLoginSection(
                 name = maskPhone(repo.phone ?: current.username),
                 onSignOut = {
                     runCatching { repo.signOut() }
-                    store.signOut(sid, clearPassword = false)
+                    store.signOut(sid, clearPassword = true)
                     phone = ""
                     password = ""
+                    rememberPassword = false
+                    remembered = false
                     message = "已退出登录"
                     messageIsError = false
-                    Toast.makeText(context, "已退出登录", Toast.LENGTH_SHORT).show()
                 },
             )
 
@@ -103,10 +117,15 @@ fun CxLoginSection(
                 )
             } else {
                 Text(
-                    "密码只用于本次登录，不保存在本机；登录后的会话加密保存在本机。",
+                    if (remembered) {
+                        "会话与密码都加密保存在本机，登录过期时会自动重登。"
+                    } else {
+                        "会话加密保存在本机；密码没有保存，登录过期时需要手动重登。"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
                 return@Column
             }
         }
@@ -145,6 +164,21 @@ fun CxLoginSection(
             },
         )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("记住密码", modifier = Modifier.weight(1f))
+            Switch(
+                checked = rememberPassword,
+                onCheckedChange = { checked ->
+                    rememberPassword = checked
+                    if (!checked) forget()
+                },
+                enabled = !loading,
+            )
+        }
+
         message?.let { text ->
             Text(
                 text,
@@ -168,14 +202,15 @@ fun CxLoginSection(
                         loading = true
                         message = null
                         try {
-                            repo.login(user, pw)
+                            repo.login(user, pw, rememberPassword = rememberPassword)
                             store.markLoggedIn(
                                 serviceId = sid,
                                 username = user,
                                 nickname = maskPhone(user),
                             )
+                            remembered = rememberPassword
                             phone = user
-                            password = ""
+                            if (!rememberPassword) password = ""
                             message = "登录成功"
                             messageIsError = false
                             Toast.makeText(context, "登录成功", Toast.LENGTH_SHORT).show()
@@ -205,7 +240,11 @@ fun CxLoginSection(
 
         if (!current.loggedIn) {
             Text(
-                "密码只用于本次登录，不保存在本机；登录后的会话加密保存在本机。",
+                if (rememberPassword) {
+                    "密码会加密保存在本机，仅用于登录过期时自动重登。"
+                } else {
+                    "密码只用于本次登录，不保存在本机；登录后的会话加密保存在本机。"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
