@@ -54,7 +54,10 @@ import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.SdgyPage
+import com.sdmu.guanlitong.data.CxPage
 import com.sdmu.guanlitong.data.PuPage
+import com.sdmu.guanlitong.data.cx.CxCourse
+import com.sdmu.guanlitong.data.cx.CxCredStore
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtOrigin
@@ -78,6 +81,8 @@ import com.sdmu.guanlitong.ui.jwxt.JwxtTasksScreen
 import com.sdmu.guanlitong.ui.mine.MineScreen
 import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
+import com.sdmu.guanlitong.ui.cx.CxCourseDetailScreen
+import com.sdmu.guanlitong.ui.cx.CxCoursesScreen
 import com.sdmu.guanlitong.ui.pu.PuActivitiesScreen
 import com.sdmu.guanlitong.ui.pu.PuActivityDetailScreen
 import com.sdmu.guanlitong.ui.pu.PuCreditScreen
@@ -108,6 +113,8 @@ private sealed interface Dest {
     data class Sdgy(val page: SdgyPage = SdgyPage.Hub) : Dest
     /** 第二课堂原生页面；[activityId] 非空表示在活动列表之上叠加活动详情。 */
     data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
+    /** 学习通原生页面；[course] 非空表示课程占位详情。 */
+    data class Cx(val page: CxPage = CxPage.Courses, val course: CxCourse? = null) : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(
         val title: String,
@@ -286,6 +293,8 @@ fun AppRoot(repository: AppRepository) {
 
             is FeatureAction.Pu -> goForward(Dest.Pu(action.page))
 
+            is FeatureAction.Cx -> goForward(Dest.Cx(action.page))
+
             is FeatureAction.SdgyApp -> {
                 val web = action.action
                 when {
@@ -452,6 +461,7 @@ fun AppRoot(repository: AppRepository) {
                                         JwxtCache.clear(context)
                                         SdgySessionStore(context).clear()
                                         PuCredStore(context).clear()
+                                        CxCredStore(context).clear()
                                     },
                                     jwxtSource = jwxtSource,
                                     versionName = currentVersion,
@@ -603,6 +613,18 @@ fun AppRoot(repository: AppRepository) {
                             PuPage.SignCode -> PuSignCodeScreen(
                                 onBack = { goBack() },
                                 initialActivityId = dest.activityId,
+                            )
+                        }
+
+                        is Dest.Cx -> when (dest.page) {
+                            CxPage.Courses -> CxCoursesScreen(
+                                onBack = { goBack() },
+                                onOpenCourse = { goForward(Dest.Cx(CxPage.CourseDetail, it)) },
+                            )
+
+                            CxPage.CourseDetail -> CxCourseDetailScreen(
+                                course = dest.course,
+                                onBack = { goBack() },
                             )
                         }
 

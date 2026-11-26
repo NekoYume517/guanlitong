@@ -1,6 +1,7 @@
 package com.sdmu.guanlitong.data
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bolt
@@ -27,6 +28,9 @@ enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 /** 第二课堂内置的原生页面。 */
 enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
+/** 学习通内置的原生页面。第一期只有课程列表与占位详情。 */
+enum class CxPage { Courses, CourseDetail }
+
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
     val title: String,
@@ -52,6 +56,9 @@ sealed interface FeatureAction {
 
     /** 第二课堂内置原生页面。 */
     data class Pu(val page: PuPage) : FeatureAction
+
+    /** 学习通内置原生页面。 */
+    data class Cx(val page: CxPage) : FeatureAction
 
     /** 打开某个服务的网页；[url] 为空时用服务配置的地址。 */
     data class Web(val serviceId: String, val url: String? = null) : FeatureAction
@@ -89,6 +96,7 @@ val ServiceFeature.targetServiceId: String
         is FeatureAction.Jwxt -> serviceId
         is FeatureAction.Sdgy -> serviceId
         is FeatureAction.Pu -> serviceId
+        is FeatureAction.Cx -> serviceId
         is FeatureAction.SdgyApp -> serviceId
         FeatureAction.Timetable -> serviceId
     }
@@ -231,6 +239,14 @@ ServiceFeature(
             subtitle = "主办方 · 动态码",
             icon = Icons.Outlined.AddBox,
             action = FeatureAction.Pu(PuPage.SignCode),
+        ),
+        ServiceFeature(
+            id = "cx.courses",
+            serviceId = "cx",
+            title = "我的课程",
+            subtitle = "课程封面 · 教师",
+            icon = Icons.AutoMirrored.Outlined.MenuBook,
+            action = FeatureAction.Cx(CxPage.Courses),
         ),
     )
 

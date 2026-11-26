@@ -153,8 +153,8 @@ fun AccountScreen(
                 )
             }
 
-            // 第二课堂只用 App 账号，没有网页地址，不需要提示。
-            if (serviceUrl.isBlank() && service.id != "pu") {
+            // 第二课堂、学习通只用 App 账号，没有网页地址，不需要提示。
+            if (serviceUrl.isBlank() && service.id != "pu" && service.id != "cx") {
                 WarningCard(
                     text = "这个服务暂时用不了。",
                 )
@@ -223,6 +223,12 @@ fun AccountScreen(
                 )
 
                 service.id == "pu" -> PuLoginSection(
+                    service = service,
+                    account = account,
+                    store = store,
+                )
+
+                service.id == "cx" -> CxLoginSection(
                     service = service,
                     account = account,
                     store = store,
