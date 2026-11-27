@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-11-25T16:25:23Z",
-  "updated_at": "2026-11-27T11:40:47Z",
+  "updated_at": "2026-11-27T12:28:14Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -29,9 +29,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "620838eb92d82e9136bbcbb37c590b4744ad691e3c86662f639ec8305996ef82",
+      "sha256": "d1f5608e92d5d0debbd31724186cc59566af58ae2743f2d2bd9503b761e4f101",
       "size": 156660,
-      "normalized_sha256": "620838eb92d82e9136bbcbb37c590b4744ad691e3c86662f639ec8305996ef82"
+      "normalized_sha256": "d1f5608e92d5d0debbd31724186cc59566af58ae2743f2d2bd9503b761e4f101"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -47,9 +47,9 @@
     },
     "app/build.gradle.kts": {
       "role": "index",
-      "sha256": "c0113483f556178b3c3df59875374eb351d523497d0228dab875de159fbb15ad",
+      "sha256": "eca8345cd687aeab55a41324915152db1037ae5b0f8ff6d80d8362fe9b8719e6",
       "size": 4331,
-      "normalized_sha256": "c0113483f556178b3c3df59875374eb351d523497d0228dab875de159fbb15ad"
+      "normalized_sha256": "eca8345cd687aeab55a41324915152db1037ae5b0f8ff6d80d8362fe9b8719e6"
     },
     "app/proguard-rules.pro": {
       "role": "index",
