@@ -70,6 +70,7 @@ import com.sdmu.guanlitong.data.jwxt.GradeBoard
 import com.sdmu.guanlitong.data.jwxt.JcTime
 import com.sdmu.guanlitong.data.jwxt.GradeWidgetConfig
 import com.sdmu.guanlitong.data.jwxt.GradeWidgetStyle
+import com.sdmu.guanlitong.data.jwxt.JwxtGradesCache
 import com.sdmu.guanlitong.data.jwxt.ScoreBucket
 import com.sdmu.guanlitong.data.jwxt.gradeBoard
 import com.sdmu.guanlitong.data.pu.PuCache
@@ -394,7 +395,9 @@ internal fun GradesWidget(
     val store = remember(context) { DashboardStore.get(context) }
     val items by store.items.collectAsState()
     val config = items.firstOrNull { it.id == itemId }?.gradeConfig ?: GradeWidgetConfig()
-    val cached = remember(context) { DesktopWidgetRefresher.currentCachedGrades(context) }
+    // 成绩页/桌面预热写入缓存后版本号 +1，卡片立刻重读，不用等重新进页面。
+    val cacheVersion by JwxtGradesCache.version.collectAsState()
+    val cached = remember(context, cacheVersion) { DesktopWidgetRefresher.currentCachedGrades(context) }
     val board = remember(cached, config) { cached?.let { gradeBoard(it.grades, config, updatedAtMs = it.savedAt) } }
     var editing by remember { mutableStateOf(false) }
     val editable = items.any { it.id == itemId }
@@ -778,7 +781,8 @@ private fun GradeWidgetDialog(
 @Composable
 internal fun PuWidget(size: WidgetSize, onOpen: () -> Unit) {
     val context = LocalContext.current
-    val cached = remember(context) { PuCache.peek(context) }
+    val cacheVersion by PuCache.version.collectAsState()
+    val cached = remember(context, cacheVersion) { PuCache.peek(context) }
     val summary = remember(cached) {
         cached?.let { summarizePu(it.activities, it.totalCredit, System.currentTimeMillis()) }
     }
