@@ -45,8 +45,9 @@ import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.cx.CxCourse
 import com.sdmu.guanlitong.data.cx.CxRepository
 import com.sdmu.guanlitong.data.cx.cxMessage
+import com.sdmu.guanlitong.service.CxNotifySchedule
+import com.sdmu.guanlitong.service.CxSignRecovery
 import com.sdmu.guanlitong.ui.components.rememberRemoteIcon
-import com.sdmu.guanlitong.ui.sdgy.SdgyLoading
 import com.sdmu.guanlitong.ui.sdgy.SdgyMessage
 import kotlinx.coroutines.CancellationException
 
@@ -76,6 +77,12 @@ fun CxCoursesScreen(
 
     // 会话状态不是 Snapshot 状态；这个页面不提供登录/退出，进入后读一次即可。
     val loggedIn = repo.loggedIn
+
+    // 自动签到开关还开着、进程被杀过的话，进学习通页面时把前台服务拉回来。
+    LaunchedEffect(Unit) { CxSignRecovery.ensureRunning(context) }
+
+    // 收件箱/提醒的周期任务：开关开着就确保已入队（幂等），全关则取消。
+    LaunchedEffect(Unit) { CxNotifySchedule.ensure(context) }
 
     LaunchedEffect(refreshKey, loggedIn) {
         if (!loggedIn) return@LaunchedEffect
@@ -128,7 +135,11 @@ fun CxCoursesScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                loading && courses == null -> SdgyLoading("正在加载课程…")
+                loading && courses == null -> CxColdStartLoading(
+                    text = "正在读取课程列表",
+                    resetKey = refreshKey,
+                    onRetry = { refreshKey++ },
+                )
 
                 error != null && courses == null -> SdgyMessage(
                     text = error.orEmpty(),

@@ -26,8 +26,8 @@ android {
         applicationId = "com.sdmu.guanlitong"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.2.8"
+        versionCode = 12
+        versionName = "1.2.9"
     }
 
     signingConfigs {
@@ -73,11 +73,20 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        // JVM 单测里没有真正的 android.util.Log，默认会抛 "not mocked"。
+        // 让这些桩方法返回默认值，重试/诊断日志就不会把异常覆盖成 RuntimeException。
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.activity:activity-compose:1.12.3")
+
+    // 收件箱/提醒的 30 分钟周期任务（Doze 下由系统延后执行）。
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
 
     implementation(platform("androidx.compose:compose-bom:2026.11.01"))
     implementation("androidx.compose.ui:ui")
@@ -86,6 +95,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("sh.calvin.reorderable:reorderable:3.1.0")
+
+    // 学习通作业页解析（doWork HTML）与题目配图加载。
+    implementation("org.jsoup:jsoup:1.18.3")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.glance:glance-appwidget:1.2.0") {
         version { strictly("1.2.0") }
     }

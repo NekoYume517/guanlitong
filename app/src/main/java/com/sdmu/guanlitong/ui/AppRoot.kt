@@ -17,8 +17,11 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dashboard
@@ -43,7 +46,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.BuildConfig
 import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.AppRepository
@@ -58,6 +64,11 @@ import com.sdmu.guanlitong.data.CxPage
 import com.sdmu.guanlitong.data.PuPage
 import com.sdmu.guanlitong.data.cx.CxCourse
 import com.sdmu.guanlitong.data.cx.CxCredStore
+import com.sdmu.guanlitong.data.cx.CxRepository
+import com.sdmu.guanlitong.data.cx.CxSignStore
+import com.sdmu.guanlitong.service.CxKeepAlive
+import com.sdmu.guanlitong.service.CxSignManualNotify
+import com.sdmu.guanlitong.service.CxTaskService
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtOrigin
@@ -83,6 +94,16 @@ import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
 import com.sdmu.guanlitong.ui.cx.CxCourseDetailScreen
 import com.sdmu.guanlitong.ui.cx.CxCoursesScreen
+import com.sdmu.guanlitong.ui.cx.CxGestureSignScreen
+import com.sdmu.guanlitong.ui.cx.CxInboxScreen
+import com.sdmu.guanlitong.ui.cx.CxKeepAliveGuideDialog
+import com.sdmu.guanlitong.ui.cx.CxSignScreen
+import com.sdmu.guanlitong.ui.cx.CxSignSettingsScreen
+import com.sdmu.guanlitong.ui.cx.CxStudyBall
+import com.sdmu.guanlitong.ui.cx.CxStudyBallPreview
+import com.sdmu.guanlitong.ui.cx.CxStudyBallPreviewState
+import com.sdmu.guanlitong.ui.cx.CxStudyDetailScreen
+import com.sdmu.guanlitong.ui.cx.CxWorkAnswerScreen
 import com.sdmu.guanlitong.ui.pu.PuActivitiesScreen
 import com.sdmu.guanlitong.ui.pu.PuActivityDetailScreen
 import com.sdmu.guanlitong.ui.pu.PuCreditScreen
@@ -115,6 +136,18 @@ private sealed interface Dest {
     data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
     /** 学习通原生页面；[course] 非空表示课程占位详情。 */
     data class Cx(val page: CxPage = CxPage.Courses, val course: CxCourse? = null) : Dest
+    /** 学习通作业答题页；[entryUrl] 是收件箱消息里的作业入口地址。 */
+    data class CxWork(val entryUrl: String, val title: String) : Dest
+    /** 学习通手势签到页：九宫格必须当场划，参数取自通知或收件箱链接。 */
+    data class CxGesture(
+        val activeId: String,
+        val courseId: String,
+        val classId: String,
+        val courseName: String = "",
+        val activeName: String = "",
+    ) : Dest
+    /** 刷课详情页：浮球点击进入，只读 [com.sdmu.guanlitong.service.CxTaskStatus]。 */
+    data object CxStudy : Dest
     /** 官方功能里的网页部分，内置 WebView + 免登凭据打开。 */
     data class SdgyWeb(
         val title: String,
@@ -154,6 +187,10 @@ fun AppRoot(repository: AppRepository) {
     val jwxtBaseUrl = access.origin
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
+
+    // App 自己的底部导航栏实测高度（含系统导航栏内边距）：浮球停靠时要让出这块，
+    // 否则会压住「功能」「我的」等 tab 的点击区。旋转/栏高变化时 onSizeChanged 会重报。
+    var rootBottomBarHeightPx by remember { mutableIntStateOf(0) }
     // 放在覆盖页动画外：打开子页面后概览被移出组合，滚动位置也不能随之销毁。
     val overviewScrollState = rememberScrollState()
     // 功能页选中的服务、搜索词同理：进入某个功能再返回时要保持原样，不能跳回第一个。
@@ -184,6 +221,9 @@ fun AppRoot(repository: AppRepository) {
     val updateScope = rememberCoroutineScope()
     var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
+    // 保活引导最多出现一次；之后只在设置页「后台保活」区展示入口。
+    var keepAliveGuideVisible by remember { mutableStateOf(false) }
+    val appContext = context.applicationContext
 
     fun checkForUpdate(showUpToDate: Boolean) {
         if (updateState is UpdateState.Downloading) return
@@ -275,6 +315,38 @@ fun AppRoot(repository: AppRepository) {
         overlay = if (destHistory.isEmpty()) null else destHistory.removeAt(destHistory.lastIndex)
     }
 
+    // 通知 / 冷启动的深链：MainActivity 解析后放进 CxDeepLink，这里只消费一次就清空。
+    // 已经在目标页时不重复入栈（例如连续点两条同一活动的通知）。
+    LaunchedEffect(Unit) {
+        CxDeepLink.pending.collect { route ->
+            if (route == null) return@collect
+            CxDeepLink.pending.value = null
+            val next = when (route) {
+                CxRoute.Inbox -> Dest.Cx(CxPage.Inbox)
+                CxRoute.Sign -> Dest.Cx(CxPage.Sign)
+                is CxRoute.Gesture -> Dest.CxGesture(
+                    route.activeId,
+                    route.courseId,
+                    route.classId,
+                    route.courseName,
+                    route.activeName,
+                )
+            }
+            if (overlay != next) goForward(next)
+        }
+    }
+
+    // 已登录且「签到实时提醒」默认开着：App 一启动就确保签到轮询与保活链在跑。
+    // 服务内部有启停去重，课程页/设置页再请求也不会重复开。
+    LaunchedEffect(Unit) {
+        val cxStore = CxSignStore(appContext)
+        if (!cxStore.settings().monitorEnabled) return@LaunchedEffect
+        if (!CxRepository(appContext).loggedIn) return@LaunchedEffect
+        CxTaskService.startSign(appContext)
+        CxKeepAlive.enable(appContext)
+        if (!cxStore.hasShownKeepAliveGuide()) keepAliveGuideVisible = true
+    }
+
     /** 教务原生页的「用网页打开」：跟随当前数据来源。 */
     fun openJwxtWeb(returnToTimetableAfterLogin: Boolean) {
         returnToTimetable = returnToTimetableAfterLogin
@@ -353,6 +425,11 @@ fun AppRoot(repository: AppRepository) {
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        // 最外层 Box：页面栈在里层，刷课浮球盖在所有页面之上。
+        // 浮球放在 AnimatedContent 外，切页时位置 remember 不会随页面销毁；
+        // 容器按 safeDrawing 收边，并额外避让 App 自己的底栏高度，
+        // 球不会压到状态栏 / 系统导航栏 / 根页底部 tab 上。
+        Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = overlay,
             modifier = Modifier.fillMaxSize(),
@@ -386,7 +463,11 @@ fun AppRoot(repository: AppRepository) {
                 if (dest == null) {
                     Scaffold(
                         bottomBar = {
-                            ShortNavigationBar {
+                            ShortNavigationBar(
+                                modifier = Modifier.onSizeChanged {
+                                    rootBottomBarHeightPx = it.height
+                                },
+                            ) {
                                 ShortNavigationBarItem(
                                     selected = tab == 0,
                                     onClick = { tab = 0 },
@@ -626,7 +707,78 @@ fun AppRoot(repository: AppRepository) {
                                 course = dest.course,
                                 onBack = { goBack() },
                             )
+
+                            CxPage.Sign -> CxSignScreen(
+                                onBack = { goBack() },
+                                onOpenSettings = { goForward(Dest.Cx(CxPage.SignSettings)) },
+                                onOpenCourse = { goForward(Dest.Cx(CxPage.CourseDetail, it)) },
+                                onOpenWork = { actionUrl, title ->
+                                    goForward(Dest.CxWork(actionUrl, title))
+                                },
+                                onOpenGesture = { activeId, courseId, classId, courseName, activeName ->
+                                    goForward(
+                                        Dest.CxGesture(
+                                            activeId,
+                                            courseId,
+                                            classId,
+                                            courseName,
+                                            activeName,
+                                        ),
+                                    )
+                                },
+                            )
+
+                            CxPage.SignSettings -> CxSignSettingsScreen(
+                                onBack = { goBack() },
+                            )
+
+                            CxPage.Inbox -> CxInboxScreen(
+                                onBack = { goBack() },
+                                onOpenWork = { actionUrl, title ->
+                                    goForward(Dest.CxWork(actionUrl, title))
+                                },
+                                // 收件箱详情里识别出可手划的签到时，进九宫格页当场划。
+                                onOpenGesture = { activeId, courseId, classId, courseName, activeName ->
+                                    goForward(
+                                        Dest.CxGesture(
+                                            activeId,
+                                            courseId,
+                                            classId,
+                                            courseName,
+                                            activeName,
+                                        ),
+                                    )
+                                },
+                            )
                         }
+
+                        is Dest.CxWork -> CxWorkAnswerScreen(
+                            entryUrl = dest.entryUrl,
+                            title = dest.title,
+                            onBack = { goBack() },
+                        )
+
+                        is Dest.CxGesture -> CxGestureSignScreen(
+                            activeId = dest.activeId,
+                            courseId = dest.courseId,
+                            classId = dest.classId,
+                            courseName = dest.courseName,
+                            activeName = dest.activeName,
+                            onBack = { goBack() },
+                            onDone = { success, message ->
+                                // 成功：提示并留在页上（可继续看结果）；失败只展示组件内的结果，不自动返回。
+                                if (success) {
+                                    Toast.makeText(context, "签到成功", Toast.LENGTH_SHORT).show()
+                                    CxSignManualNotify.notifySuccess(
+                                        context = context,
+                                        title = "签到成功",
+                                        body = message.ifBlank { "手势签到已提交" },
+                                    )
+                                }
+                            },
+                        )
+
+                        Dest.CxStudy -> CxStudyDetailScreen(onBack = { goBack() })
 
                         is Dest.SdgyWeb -> SdgyWebScreen(
                             title = dest.title,
@@ -739,6 +891,38 @@ fun AppRoot(repository: AppRepository) {
             }
         }
 
+        // 刷课浮球：任务没在跑时组件自身不画球、也不拦截手势。
+            // 已经在刷课详情页时点击不再入栈，避免叠出多个详情页。
+            // debug 预览由 adb 广播切换，用假状态走同一套渲染，不启动服务、不联网。
+            // 根 tab 页有 App 底栏，浮球布局已按 safeDrawing 收边，底栏又自带系统内边距，
+            // 所以只补「底栏实测高度 − 系统底栏内边距」这一段，保证气泡压在底栏上方。
+            val density = LocalDensity.current
+            val safeBottomPx = WindowInsets.safeDrawing.getBottom(density)
+            val ballBottomAvoid = if (overlay == null && rootBottomBarHeightPx > 0) {
+                with(density) {
+                    (rootBottomBarHeightPx - safeBottomPx).coerceAtLeast(0).toDp()
+                }
+            } else {
+                0.dp
+            }
+            val showBallPreview = BuildConfig.DEBUG && CxStudyBallPreviewState.visible
+            if (showBallPreview) {
+                CxStudyBallPreview(
+                    onOpen = { /* 预览不跳详情，也不开刷 */ },
+                    modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+                    bottomAvoid = ballBottomAvoid,
+                )
+            } else {
+                CxStudyBall(
+                    onOpen = {
+                        if (overlay !is Dest.CxStudy) goForward(Dest.CxStudy)
+                    },
+                    modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+                    bottomAvoid = ballBottomAvoid,
+                )
+            }
+        }
+
         // 更新对话框盖在根页面之上：无论在哪个 tab，发现新版本都能直接提示。
         UpdateDialog(
             state = updateState,
@@ -750,6 +934,21 @@ fun AppRoot(repository: AppRepository) {
                 updateState = UpdateState.Idle
             },
         )
+
+        // 首次进入且有监控时的保活引导：看完/跳过就写标记，之后不再弹。
+        if (keepAliveGuideVisible) {
+            CxKeepAliveGuideDialog(
+                onDismiss = {
+                    CxSignStore(appContext).markKeepAliveGuideShown()
+                    keepAliveGuideVisible = false
+                },
+                onOpenSettings = {
+                    CxSignStore(appContext).markKeepAliveGuideShown()
+                    keepAliveGuideVisible = false
+                    goForward(Dest.Cx(CxPage.SignSettings))
+                },
+            )
+        }
 
         }
 }

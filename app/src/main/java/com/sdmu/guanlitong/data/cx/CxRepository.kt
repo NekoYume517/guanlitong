@@ -78,20 +78,34 @@ class CxRepository internal constructor(
     /** 取消勾选「记住密码」时立即清掉本机保存的密码。 */
     fun forgetPassword() = vault.clear()
 
-    suspend fun courses(): List<CxCourse> {
+    suspend fun courses(): List<CxCourse> = withSession { session ->
+        sourceFactory(session.cookies).courses()
+    }
+
+    /** 主动重登一次（刷课连续失败时由执行器调用）；返回是否拿到新会话。 */
+    suspend fun refreshSession(): Boolean = relogin(refreshVersion) != null
+
+    /**
+     * 通用学习通会话入口：块内抛 401 时单飞重登并用新会话重试一次。
+     *
+     * 刷课、签到等后续协议全部走这里，不要各自处理 401；并发的 401 只会有一次
+     * 真正登录（见 [relogin]），其余等锁后直接复用新会话。
+     */
+    suspend fun <T> withSession(block: suspend (CxSession) -> T): T {
         val current = cred.session ?: throw CxException(AUTH_LOST, 401)
         if (current.cookies.isEmpty()) throw CxException(AUTH_LOST, 401)
 
         val seenVersion = refreshVersion
         try {
-            return sourceFactory(current.cookies).courses()
+            return block(current)
         } catch (e: CxException) {
             if (e.code != 401) throw e
         }
 
-        val cookies = relogin(seenVersion) ?: throw CxException(AUTH_LOST, 401)
+        relogin(seenVersion) ?: throw CxException(AUTH_LOST, 401)
+        val renewed = cred.session ?: throw CxException(AUTH_LOST, 401)
         try {
-            return sourceFactory(cookies).courses()
+            return block(renewed)
         } catch (e: CxException) {
             if (e.code == 401) throw CxException(AUTH_LOST, 401)
             throw e

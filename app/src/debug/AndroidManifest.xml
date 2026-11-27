@@ -12,5 +12,21 @@
                 android:name="android.view.im"
                 android:resource="@xml/debug_input_method" />
         </service>
+
+        <!--
+          刷课浮球预览开关，仅 debug 构建存在。只切换一个纯渲染的假状态，
+          不启动服务、不联网、不改真实刷课状态。
+          导出是必须的：adb shell 属于 uid 2000，exported=false 的接收器会被
+          AMS 拒绝（Permission Denial: not exported from uid 2000），发不进来；
+          这里用显式组件 + 无敏感动作来收窄面，release 里整个文件不参与合并。
+        -->
+        <receiver
+            android:name=".debug.StudyBallPreviewReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.sdmu.guanlitong.debug.SHOW_STUDY_BALL" />
+                <action android:name="com.sdmu.guanlitong.debug.HIDE_STUDY_BALL" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
