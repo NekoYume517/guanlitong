@@ -11,6 +11,21 @@
     <!-- 应用内更新下载完 APK 后要交给系统安装器，Android 8.0 起需要这条权限。 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!--
+        学习通刷课 / 签到的前台服务：任务期间常驻通知。
+        用 specialUse 而不是 dataSync：Android 15 禁止从 BOOT_COMPLETED 启动 dataSync
+        等类型的前台服务，specialUse 不在该限制名单里，开机恢复才能生效。
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 设备重启后若已登录且签到实时提醒开着，自动恢复签到监控。 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 心跳兜底优先使用精确闹钟；无授权时自动退化为非精确。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 设置页引导用户把本应用加入电池优化白名单。 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -46,6 +61,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -90,6 +106,37 @@
                 <action android:name="com.sdmu.guanlitong.widget.REFRESH" />
             </intent-filter>
         </receiver>
+
+        <!-- 心跳 / 任务划掉后的延迟重启：只接本应用闹钟的显式广播，不导出。 -->
+        <receiver
+            android:name=".service.CxKeepAliveReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.sdmu.guanlitong.action.SIGN_HEARTBEAT" />
+                <action android:name="com.sdmu.guanlitong.action.SIGN_RESTART" />
+                <action android:name="com.sdmu.guanlitong.action.SIGN_RETRY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 重启 / 应用更新后恢复签到监控：仅认系统广播，不导出。 -->
+        <receiver
+            android:name=".service.CxBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 刷课 / 签到共用前台服务，只在 App 进程内启动，不导出。 -->
+        <service
+            android:name=".service.CxTaskService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="学习通签到监控与课程刷课后台任务" />
+        </service>
     </application>
 
 </manifest>

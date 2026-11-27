@@ -90,7 +90,8 @@ object CxLoginApi {
         //    status=true 带 url 是跳转，交给下面的 Cookie 判定。
         val json = runCatching { JSONObject(body) }.getOrNull()
         if (json != null) {
-            val ok = json.optBoolean("status", false)
+            // status 也可能是数字 1，统一走宽容判定，避免登录成功被误判失败。
+            val ok = json.cxFlag("status")
             val redirectUrl = json.optString("url").takeUnless {
                 it.isBlank() || it.equals("null", ignoreCase = true)
             }

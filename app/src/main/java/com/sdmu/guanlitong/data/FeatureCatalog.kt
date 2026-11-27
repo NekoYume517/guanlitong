@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ElectricalServices
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.HowToReg
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -28,8 +30,8 @@ enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 /** 第二课堂内置的原生页面。 */
 enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
-/** 学习通内置的原生页面。第一期只有课程列表与占位详情。 */
-enum class CxPage { Courses, CourseDetail }
+/** 学习通内置的原生页面。 */
+enum class CxPage { Courses, CourseDetail, Sign, SignSettings, Inbox }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
@@ -247,6 +249,30 @@ ServiceFeature(
             subtitle = "课程封面 · 教师",
             icon = Icons.AutoMirrored.Outlined.MenuBook,
             action = FeatureAction.Cx(CxPage.Courses),
+        ),
+        ServiceFeature(
+            id = "cx.sign",
+            serviceId = "cx",
+            title = "签到",
+            subtitle = "进行中 · 记录",
+            icon = Icons.Outlined.TaskAlt,
+            action = FeatureAction.Cx(CxPage.Sign),
+        ),
+        ServiceFeature(
+            id = "cx.checkin",
+            serviceId = "cx",
+            title = "自动签到",
+            subtitle = "签到 · 签退 · 定位",
+            icon = Icons.Outlined.HowToReg,
+            action = FeatureAction.Cx(CxPage.SignSettings),
+        ),
+        ServiceFeature(
+            id = "cx.notices",
+            serviceId = "cx",
+            title = "收件箱",
+            subtitle = "通知 · 签到 · 作业",
+            icon = Icons.Outlined.Email,
+            action = FeatureAction.Cx(CxPage.Inbox),
         ),
     )
 
