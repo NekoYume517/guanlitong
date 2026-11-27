@@ -12,7 +12,7 @@ gradlew.bat[FV4S]: F:Windows 下的 Gradle Wrapper 启动脚本：解析 JAVA_HO
 settings.gradle.kts[FV3T]: F:声明 Gradle 插件与依赖仓库，开启 FAIL_ON_PROJECT_REPOS，并把 app 模块纳入构建 | R:code:app/build.gradle.kts,code:gradlew.bat | A:仓库声明、模块包含 | S:FAIL_ON_PROJECT_REPOS 禁止模块内再声明仓库
 
 ===/<repository>/app/===
-build.gradle.kts[FV6S]: F:Android 构建配置：compileSdk 37.1、minSdk 26、版本 1.3.0（versionCode 13）；依赖含 Compose、WorkManager、jsoup、Coil、Glance 小组件、ML Kit 离线 OCR 与 zxing 码生成/扫码。 | R:code:app/proguard-rules.pro | A:signingConfigs,buildTypes,testOptions,dependencies | S:unitTests.isReturnDefaultValues=true 不能删：JVM 单测没有 android.util.Log，删后日志调用会把异常盖成 not mocked；无 keystore.properties 时 release 退回调试签名，有则用 keystore/guanlitong-debug.jks，证书与调试签名一致可覆盖升级。
+build.gradle.kts[FV6S]: F:Android 构建配置：compileSdk 37.1、minSdk 26、版本 1.3.1（versionCode 14）；依赖含 Compose、WorkManager、jsoup、Coil、Glance 小组件、ML Kit 离线 OCR 与 zxing 码生成/扫码。 | R:code:app/proguard-rules.pro | A:signingConfigs,buildTypes,testOptions,dependencies | S:unitTests.isReturnDefaultValues=true 不能删：JVM 单测没有 android.util.Log，删后日志调用会把异常盖成 not mocked；无 keystore.properties 时 release 退回调试签名，有则用 keystore/guanlitong-debug.jks，证书与调试签名一致可覆盖升级。
 proguard-rules.pro[FV7T]: F:保留 WebView JS 接口与 PU JNI 桥的混淆规则 | R:code:app/src/main/java/com/pu/encrypt/StringEncryptor.java | A:JNI 类保留、JS 接口保留 | S:StringEncryptor 的包名、类名与方法名与 native 静态注册绑定，被混淆即 UnsatisfiedLinkError
 
 ===/<repository>/app/src/debug/===
