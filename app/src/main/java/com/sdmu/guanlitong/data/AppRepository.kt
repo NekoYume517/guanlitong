@@ -6,7 +6,7 @@ import android.content.Context
 class AppRepository(context: Context) {
     val accounts = AccountStore(context)
     val settings = SettingsStore(context)
-    val dashboard = DashboardStore(context)
+    val dashboard = DashboardStore.get(context)
     val quickActions = QuickActionStore(
         context,
         dashboard.items.value

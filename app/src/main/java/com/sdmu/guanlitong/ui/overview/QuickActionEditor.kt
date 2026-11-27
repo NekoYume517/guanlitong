@@ -70,14 +70,13 @@ import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableRow
 
 /**
- * 候选入口只给「已经登录的服务」；
- * 已添加到快捷区的卡片不受影响，退出登录后仍保留原绑定。
+ * 候选区展示当前功能目录里的全部入口，不再按登录状态裁剪：
+ * 学习通、第二课堂这类新服务未登录时也要能被添加，点开后再由页面自己引导登录。
+ * 只有「抢课任务」依赖抢课助手会话，未登录抢课助手时不提供。
  */
 private fun ServiceFeature.availableFor(loggedIn: Set<String>): Boolean = when {
     grabSourceOnly -> "grab" in loggedIn
-    // 教务功能官方与抢课助手共用，任一已登录的教务账号都能打开（数据来源在教务页切换）。
-    serviceId == "jwxt" -> "jwxt" in loggedIn || "grab" in loggedIn
-    else -> serviceId in loggedIn
+    else -> true
 }
 
 /**
@@ -92,7 +91,7 @@ fun QuickActionEditorSheet(
     focusId: String?,
     selectedFeatures: List<ServiceFeature>,
     sdgyGroups: List<SdgyAppGroup>,
-    /** 已登录的服务 ID；候选区只展示已登录服务的入口。 */
+    /** 已登录的服务 ID；目前只用来判断抢课任务是否可选。 */
     loggedInServices: Set<String>,
     /** 这块卡片最多能放几个入口：小号卡片只有两个槽位。 */
     maxActions: Int = MAX_ACTIONS,

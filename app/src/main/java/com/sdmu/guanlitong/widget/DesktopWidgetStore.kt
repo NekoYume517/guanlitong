@@ -3,6 +3,10 @@ package com.sdmu.guanlitong.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import com.sdmu.guanlitong.data.WidgetType
+import com.sdmu.guanlitong.data.jwxt.GradeWidgetConfig
+import com.sdmu.guanlitong.data.jwxt.parseGradeWidgetConfig
+import com.sdmu.guanlitong.data.jwxt.toJson
+import org.json.JSONObject
 
 /** 桌面只暴露三种尺寸；内容类型由每个实例独立配置。 */
 enum class DesktopSize(val key: String, val label: String, val description: String) {
@@ -19,6 +23,7 @@ enum class DesktopSize(val key: String, val label: String, val description: Stri
 data class DesktopWidgetConfig(
     val size: DesktopSize = DesktopSize.Medium,
     val type: WidgetType = WidgetType.NextClass,
+    val gradeConfig: GradeWidgetConfig? = null,
 )
 
 class DesktopWidgetStore(context: Context) {
@@ -29,15 +34,32 @@ class DesktopWidgetStore(context: Context) {
         type = WidgetType.entries.firstOrNull {
             it.key == prefs.getString("type_$id", null)
         } ?: WidgetType.NextClass,
+        gradeConfig = loadGradeConfig(id),
     )
 
     fun save(id: Int, size: DesktopSize, type: WidgetType) {
         prefs.edit().putString("size_$id", size.key).putString("type_$id", type.key).apply()
     }
 
+    /**
+     * 桌面成绩卡片配置，按 appWidgetId 分别存。
+     *
+     * 旧版本没有 `grade_<id>`，或内容不是合法 JSON 时返回 null（按默认配置渲染）。
+     */
+    fun loadGradeConfig(id: Int): GradeWidgetConfig? {
+        val raw = prefs.getString("grade_$id", null) ?: return null
+        return parseGradeWidgetConfig(runCatching { JSONObject(raw) }.getOrNull())
+    }
+
+    fun saveGradeConfig(id: Int, config: GradeWidgetConfig?) {
+        prefs.edit().apply {
+            if (config == null) remove("grade_$id") else putString("grade_$id", config.toJson().toString())
+        }.apply()
+    }
+
     fun delete(ids: IntArray) {
         prefs.edit().apply {
-            ids.forEach { remove("size_$it"); remove("type_$it") }
+            ids.forEach { remove("size_$it"); remove("type_$it"); remove("grade_$it") }
         }.apply()
     }
 }

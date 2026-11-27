@@ -24,16 +24,22 @@ import com.sdmu.guanlitong.data.cx.CxException
 import com.sdmu.guanlitong.data.cx.CxRemoteSignGateway
 import com.sdmu.guanlitong.data.cx.CxRemoteStudyGateway
 import com.sdmu.guanlitong.data.cx.CxRepository
+import com.sdmu.guanlitong.data.cx.CxSignBrief
 import com.sdmu.guanlitong.data.cx.CxSignLoopGuard
 import com.sdmu.guanlitong.data.cx.CxSignNotice
 import com.sdmu.guanlitong.data.cx.CxSignNoticeItem
 import com.sdmu.guanlitong.data.cx.CxSignRunner
+import com.sdmu.guanlitong.data.cx.CxSignSnapshot
+import com.sdmu.guanlitong.data.cx.CxSignSnapshotStore
 import com.sdmu.guanlitong.data.cx.CxSignStore
 import com.sdmu.guanlitong.data.cx.CxStudyEngine
 import com.sdmu.guanlitong.data.cx.CxStudyEvent
+import com.sdmu.guanlitong.data.cx.CxStudySnapshot
+import com.sdmu.guanlitong.data.cx.CxStudySnapshotStore
 import com.sdmu.guanlitong.data.cx.cxSignModeLabel
 import com.sdmu.guanlitong.data.cx.displayName
 import com.sdmu.guanlitong.data.cx.signAccountKey
+import com.sdmu.guanlitong.data.cx.successfulCheckinIds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +72,14 @@ class CxTaskService : Service() {
     private var lastPostedAtMillis = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        // 刷课进度落盘给桌面小组件；签到启动时初始状态为空，persistStudySnapshot 会跳过。
+        scope.launch {
+            CxTaskStatus.state.collect { persistStudySnapshot(it) }
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
@@ -284,6 +298,9 @@ private suspend fun runSignLoop() {
         val runner = CxSignRunner(gateway, store, accountKey, { store.settings() })
         try {
             val notices = runner.poll()
+            // 小组件快照：只写本地，失败不影响签到轮询本身。
+            runCatching { saveSignSnapshot(store, accountKey, runner) }
+                .onFailure { Log.w(TAG, "sign snapshot failed ${it.javaClass.simpleName}") }
             notices.forEach(::notifySignResult)
             CxSignStatus.pulse(notices.size)
             // 刷课在跑时前台通知归刷课（独立 id），签到先不在每轮重复发常驻通知。
@@ -307,6 +324,72 @@ private suspend fun runSignLoop() {
         )
         delay(nextMs)
     }
+}
+
+/**
+ * 把这一轮扫描结果写成小组件快照。
+ *
+ * 进行中的签到排除本地已成功记录（与签到页/收件箱同一判断）；最近一次结果取历史
+ * 第一条；受限信息取当前未过期的退避记录。全部来自本地，不额外请求。
+ */
+private fun saveSignSnapshot(store: CxSignStore, accountKey: String, runner: CxSignRunner) {
+    val now = System.currentTimeMillis()
+    val succeeded = successfulCheckinIds(store.history(accountKey))
+    val ongoing = runner.lastOpenCheckins
+        .asSequence()
+        .filterNot { it.activeId in succeeded }
+        .map {
+            CxSignBrief(
+                activeId = it.activeId,
+                courseName = it.courseName.ifBlank { it.activeName },
+                modeLabel = it.modeLabel,
+                startsAtMs = it.startsAtMs ?: 0L,
+                endsAtMs = it.endsAtMs ?: 0L,
+            )
+        }
+        .distinctBy { it.activeId }
+        .toList()
+    val latest = store.history(accountKey).firstOrNull()
+    val restriction = store.restriction(accountKey, now)
+    CxSignSnapshotStore.save(
+        applicationContext,
+        CxSignSnapshot(
+            accountKey = accountKey,
+            updatedAtMs = now,
+            ongoing = ongoing,
+            lastResultTitle = latest?.displayTitle.orEmpty(),
+            lastResultLabel = latest?.result?.label.orEmpty(),
+            lastResultDetail = latest?.detail.orEmpty(),
+            lastResultAtMs = latest?.atMs ?: 0L,
+            restrictionUntilMs = restriction?.untilMs ?: 0L,
+            restrictionMessage = restriction?.message.orEmpty(),
+        ),
+    )
+}
+
+/**
+ * 刷课状态落盘。刷课服务的初始空状态不覆盖已有快照：只有跑过、有终态消息或
+ * 有课程名时才写。概览用进程内 [CxTaskStatus]，桌面小组件读这份快照。
+ */
+private fun persistStudySnapshot(state: CxTaskState) {
+    if (!state.running && state.message.isBlank() && state.courseName.isBlank()) return
+    CxStudySnapshotStore.save(
+        applicationContext,
+        CxStudySnapshot(
+            updatedAtMs = System.currentTimeMillis(),
+            running = state.running,
+            courseName = state.courseName,
+            phase = state.phase,
+            currentIndex = state.currentIndex,
+            total = state.total,
+            currentTask = state.currentTask,
+            position = state.position,
+            duration = state.duration,
+            message = state.message,
+            fatalError = state.fatalError,
+            incomplete = state.incomplete,
+        ),
+    )
 }
 
 private fun stopSignLoopWith(message: String) {

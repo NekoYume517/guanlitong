@@ -55,6 +55,7 @@ import com.sdmu.guanlitong.data.Account
 import com.sdmu.guanlitong.data.AppRepository
 import com.sdmu.guanlitong.data.CookieUtils
 import com.sdmu.guanlitong.data.FeatureAction
+import com.sdmu.guanlitong.data.FeatureCatalog
 import com.sdmu.guanlitong.data.OnboardingPrefs
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.ServiceCatalog
@@ -93,6 +94,7 @@ import com.sdmu.guanlitong.ui.mine.MineScreen
 import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
 import com.sdmu.guanlitong.ui.cx.CxCourseDetailScreen
+import com.sdmu.guanlitong.ui.cx.CxCourseHomeScreen
 import com.sdmu.guanlitong.ui.cx.CxCoursesScreen
 import com.sdmu.guanlitong.ui.cx.CxGestureSignScreen
 import com.sdmu.guanlitong.ui.cx.CxInboxScreen
@@ -136,6 +138,9 @@ private sealed interface Dest {
     data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
     /** 学习通原生页面；[course] 非空表示课程占位详情。 */
     data class Cx(val page: CxPage = CxPage.Courses, val course: CxCourse? = null) : Dest
+
+    /** 某门课程自己的功能页（课程名 + 模块列表）；不占用 [CxPage]，功能页入口保持原样。 */
+    data class CxCourseHome(val course: CxCourse? = null) : Dest
     /** 学习通作业答题页；[entryUrl] 是收件箱消息里的作业入口地址。 */
     data class CxWork(val entryUrl: String, val title: String) : Dest
     /** 学习通手势签到页：九宫格必须当场划，参数取自通知或收件箱链接。 */
@@ -398,6 +403,15 @@ fun AppRoot(repository: AppRepository) {
                     goForward(Dest.Web(action.serviceId))
                 }
             }
+        }
+    }
+
+    // 桌面小组件的「按功能直达」：只认 feature_id，映射与快捷入口共用 openFeature。
+    LaunchedEffect(Unit) {
+        FeatureDeepLink.pending.collect { featureId ->
+            if (featureId == null) return@collect
+            FeatureDeepLink.pending.value = null
+            FeatureCatalog.byId(featureId)?.let { openFeature(it) }
         }
     }
 
@@ -697,10 +711,19 @@ fun AppRoot(repository: AppRepository) {
                             )
                         }
 
+                        is Dest.CxCourseHome -> CxCourseHomeScreen(
+                            course = dest.course,
+                            onBack = { goBack() },
+                            onOpenModule = { page ->
+                                goForward(Dest.Cx(page, dest.course))
+                            },
+                        )
+
                         is Dest.Cx -> when (dest.page) {
                             CxPage.Courses -> CxCoursesScreen(
                                 onBack = { goBack() },
-                                onOpenCourse = { goForward(Dest.Cx(CxPage.CourseDetail, it)) },
+                                // 先到这门课的功能页，再按模块进具体功能。
+                                onOpenCourse = { goForward(Dest.CxCourseHome(it)) },
                             )
 
                             CxPage.CourseDetail -> CxCourseDetailScreen(
@@ -711,7 +734,8 @@ fun AppRoot(repository: AppRepository) {
                             CxPage.Sign -> CxSignScreen(
                                 onBack = { goBack() },
                                 onOpenSettings = { goForward(Dest.Cx(CxPage.SignSettings)) },
-                                onOpenCourse = { goForward(Dest.Cx(CxPage.CourseDetail, it)) },
+                                // 签到页的「点课程去签到」也先落课程功能页，再进章节刷课。
+                                onOpenCourse = { goForward(Dest.CxCourseHome(it)) },
                                 onOpenWork = { actionUrl, title ->
                                     goForward(Dest.CxWork(actionUrl, title))
                                 },
