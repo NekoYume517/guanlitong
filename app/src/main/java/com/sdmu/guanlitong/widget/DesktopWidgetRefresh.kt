@@ -12,9 +12,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sdmu.guanlitong.data.AccountStore
-import com.sdmu.guanlitong.data.ServiceCatalog
 import com.sdmu.guanlitong.data.SettingsStore
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
+import com.sdmu.guanlitong.data.jwxt.JwxtAccessResolver
 import com.sdmu.guanlitong.data.jwxt.JwxtCache
 import com.sdmu.guanlitong.data.jwxt.JwxtGradesCache
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
@@ -418,19 +418,11 @@ object DesktopWidgetRefresher {
             )
         }
 
-    private fun currentAccess(context: Context): JwxtAccess? {
-        val settings = SettingsStore(context)
-        val jwxt = ServiceCatalog.byId("jwxt") ?: return null
-        val grab = ServiceCatalog.byId("grab")
-        return JwxtAccess(
-            source = settings.jwxtSource.value,
-            officialUrl = settings.urlFor(jwxt),
-            grabUrl = grab?.let(settings::urlFor).orEmpty(),
-        )
-    }
+    private fun currentAccess(context: Context): JwxtAccess? =
+        JwxtAccessResolver.current(context)
 
     private fun currentJwxtOrigin(context: Context): String =
-        currentAccess(context)?.origin.orEmpty()
+        JwxtAccessResolver.currentOrigin(context)
 
     private data class PuPrewarmPayload(
         val activities: List<com.sdmu.guanlitong.data.pu.PuActivity>,

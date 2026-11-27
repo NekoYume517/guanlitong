@@ -63,8 +63,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.pu.PuActions
 import com.sdmu.guanlitong.data.pu.PuActivity
+import com.sdmu.guanlitong.data.pu.PuCache
 import com.sdmu.guanlitong.data.pu.PuSign
 import com.sdmu.guanlitong.ui.sdgy.SdgyLoading
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -135,6 +137,15 @@ fun PuActivitiesScreen(
                 totalPages = paged.totalPages
                 count = paged.count
                 error = null
+                // 概览卡片读的是首页快照：只在未搜索的第一页写入，分页/搜索不覆盖。
+                if (target == 1 && effectiveQuery.isBlank()) {
+                    scope.launch(Dispatchers.IO) {
+                        val total = runCatching { PuActions.me().second.total }.getOrNull()
+                            ?: PuCache.peek(context)?.totalCredit
+                            ?: 0.0
+                        PuCache.save(context, paged.list, total)
+                    }
+                }
             }
             is PuOutcome.AuthLost -> authLost = true
             is PuOutcome.Fail -> if (target == 1) {

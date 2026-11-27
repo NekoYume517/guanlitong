@@ -72,6 +72,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +82,8 @@ import com.sdmu.guanlitong.data.jwxt.GrabLogInfo
 import com.sdmu.guanlitong.data.jwxt.GrabTaskInfo
 import com.sdmu.guanlitong.data.jwxt.GradeItem
 import com.sdmu.guanlitong.data.jwxt.JwxtAccess
+import com.sdmu.guanlitong.data.jwxt.JwxtAccessResolver
+import com.sdmu.guanlitong.data.jwxt.JwxtGradesCache
 import com.sdmu.guanlitong.data.jwxt.JwxtDataSource
 import com.sdmu.guanlitong.data.jwxt.JwxtException
 import com.sdmu.guanlitong.data.jwxt.JwxtSessionExpiredException
@@ -89,8 +92,10 @@ import com.sdmu.guanlitong.data.jwxt.SelectionCourse
 import com.sdmu.guanlitong.data.jwxt.SelectionStatus
 import com.sdmu.guanlitong.data.jwxt.TeachingClass
 import com.sdmu.guanlitong.ui.format.formatDateTime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -258,6 +263,7 @@ fun JwxtGradesScreen(
     var refreshing by remember { mutableStateOf(false) }
     var state by remember(origin) { mutableStateOf<DataState<List<GradeItem>>>(DataState.Loading) }
     var semester by remember { mutableStateOf("全部") }
+    val context = LocalContext.current
 
     val cookie = remember(access, refreshToken, attempt) { access.cookie() }
     val client = remember(access, cookie) { access.client(cookie) }
@@ -279,7 +285,16 @@ fun JwxtGradesScreen(
         refreshing = true
         state = DataState.Loading
         state = try {
-            DataState.Ready(client?.fetchGrades() ?: throw JwxtException("数据来源不可用"))
+            val grades = client?.fetchGrades() ?: throw JwxtException("数据来源不可用")
+            // 成绩页拿到的就是最新数据，顺手写进小组件读的那份缓存；origin 与读取端同一解析。
+            withContext(Dispatchers.IO) {
+                JwxtGradesCache.save(
+                    context,
+                    JwxtAccessResolver.currentOrigin(context).ifBlank { origin },
+                    grades,
+                )
+            }
+            DataState.Ready(grades)
         } catch (e: JwxtSessionExpiredException) {
             DataState.Failed("登录已过期")
         } catch (e: JwxtException) {
