@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
@@ -481,7 +482,15 @@ private fun ChildCard(child: CxChildContent, onStartTask: (CxTaskCard) -> Unit) 
                         )
                     }
                     if (!card.isPassed && card.isBrushable) {
-                        TextButton(onClick = { onStartTask(card) }) { Text("刷") }
+                        // 单节播放：保持本页 Outlined 图标风格；IconButton 自带 48dp 触控区。
+                        // 禁用逻辑不变——仍由外面「未通过且可刷」这个条件控制是否出现。
+                        IconButton(onClick = { onStartTask(card) }) {
+                            Icon(
+                                Icons.Outlined.PlayArrow,
+                                contentDescription = "播放本节",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }

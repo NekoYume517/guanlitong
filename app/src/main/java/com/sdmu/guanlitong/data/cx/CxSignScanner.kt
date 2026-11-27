@@ -26,6 +26,8 @@ data class CxOpenSign(
     val otherId: Int,
     val endTime: String,
     val endsAtMs: Long?,
+    /** 服务端给的开始时间；用于小组件算剩余时间占比。 */
+    val startsAtMs: Long? = null,
 ) {
     /** 方式标签：普通 / 位置 / 手势 / 二维码 / 拍照。 */
     val modeLabel: String get() = cxSignModeLabel(otherId)
@@ -167,6 +169,7 @@ class CxSignScanner(
                         otherId = active.otherIdValue,
                         endTime = active.endTime,
                         endsAtMs = CxDateTime.parseMs(active.endTime, nowMs()),
+                        startsAtMs = CxDateTime.parseMs(active.startTime, nowMs()),
                     )
                 }
             // 每门课一行：没有活动、活动类型不对、状态不对，都能一眼区分。

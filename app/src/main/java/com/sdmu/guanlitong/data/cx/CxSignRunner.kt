@@ -100,9 +100,17 @@ class CxSignRunner(
     var lastPollHadOpenActivity: Boolean = false
         private set
 
+    /**
+     * 上一轮扫描到的进行中签到（只按服务端 status 判断，未按本地成功记录过滤）。
+     * 签到服务据此落盘小组件快照；不额外发请求。
+     */
+    var lastOpenCheckins: List<CxOpenSign> = emptyList()
+        private set
+
     suspend fun poll(): List<CxSignNoticeItem> {
         // 本轮没发请求/被退避时也归零，避免下一轮沿用上一轮的高频档。
         lastPollHadOpenActivity = false
+        lastOpenCheckins = emptyList()
         val current = settings()
         Log.i(
             TAG,
@@ -141,6 +149,7 @@ class CxSignRunner(
         val courses = rotation.select(accountKey, allCourses)
 
         val notices = mutableListOf<CxSignNoticeItem>()
+        val openCheckins = mutableListOf<CxOpenSign>()
         var activesSeen = 0
         var candidates = 0
         val openByCourse = mutableMapOf<String, Boolean>()
@@ -167,6 +176,20 @@ class CxSignRunner(
                     candidates++
                     courseHasOpen = true
                 }
+                // 小组件只统计「开放中的签到」；已签到成功的过滤交给服务层（本地历史）。
+                if (active.isCheckin && active.status == ACTIVE_STATUS_OPEN && active.id.isNotBlank()) {
+                    openCheckins += CxOpenSign(
+                        activeId = active.id,
+                        activeName = active.name,
+                        courseId = course.courseId,
+                        clazzId = course.clazzId,
+                        courseName = course.name,
+                        otherId = active.otherIdValue,
+                        endTime = active.endTime,
+                        endsAtMs = CxDateTime.parseMs(active.endTime, nowMs()),
+                        startsAtMs = CxDateTime.parseMs(active.startTime, nowMs()),
+                    )
+                }
                 handle(active, course, current)?.let(notices::add)
             }
             openByCourse[course.courseId] = courseHasOpen
@@ -175,6 +198,7 @@ class CxSignRunner(
         rotation.recordRound(accountKey, openByCourse)
         // 有开放活动才切 90s 高频档，否则退到 5 分钟，减少固定间隔批量访问。
         lastPollHadOpenActivity = candidates > 0
+        lastOpenCheckins = openCheckins
         Log.i(
             TAG,
             "poll done courses=${allCourses.size} scanned=${courses.size} " +

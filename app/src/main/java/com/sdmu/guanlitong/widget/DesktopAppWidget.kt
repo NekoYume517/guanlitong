@@ -9,10 +9,12 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
@@ -38,7 +40,6 @@ import com.sdmu.guanlitong.MainActivity
 import com.sdmu.guanlitong.data.WidgetType
 import com.sdmu.guanlitong.data.jwxt.CachedTimetable
 import com.sdmu.guanlitong.data.ServiceCatalog
-import com.sdmu.guanlitong.ui.format.formatMonthDayTime
 import com.sdmu.guanlitong.ui.format.semesterText
 
 abstract class DesktopWidgetReceiver : GlanceAppWidgetReceiver() {
@@ -46,9 +47,21 @@ abstract class DesktopWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget
         get() = DesktopAppWidget(size)
 
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: android.appwidget.AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        // 系统添加 / 周期 onUpdate 都走这里：缓存过期才真的拉一次，冷却中直接跳过。
+        DesktopWidgetRefreshSchedule.ensurePeriodic(context)
+        refreshDesktopWidgets(context)
+    }
+
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         DesktopWidgetStore(context).delete(appWidgetIds)
         super.onDeleted(context, appWidgetIds)
+        DesktopWidgetRefreshSchedule.cancelIfNoWidgets(context)
     }
 }
 
@@ -184,13 +197,14 @@ private fun NextClassDesktop(state: DesktopState) {
             }
         }
     }
-    val updateLabel = snapshot.savedAt.takeIf { it > 0 }?.let {
-        " · ${formatMonthDayTime(it)} 更新"
-    }.orEmpty()
+    val savedLabel = snapshot.savedAt.takeIf { it > 0 }
+        ?.let(::formatDesktopUpdatedLabel)
     val statusLabel = when {
-        !snapshot.hasTimetable -> ""
-        snapshot.sessionLost -> "未登录，显示上次课表$updateLabel"
-        updateLabel.isNotEmpty() -> updateLabel.removePrefix(" · ")
+        !snapshot.hasTimetable ->
+            if (state.refreshIssue) "刷新失败，打开 App 重试" else ""
+        state.refreshIssue -> "更新失败 · ${savedLabel ?: "打开 App 重试"}"
+        snapshot.sessionLost -> "未登录，${savedLabel ?: "显示上次课表"}"
+        savedLabel != null -> savedLabel
         else -> "显示上次课表"
     }
     Spacer(GlanceModifier.height(6.dp))
@@ -208,9 +222,14 @@ private fun NextClassDesktop(state: DesktopState) {
 private fun GenericDesktop(state: DesktopState) {
     when (state.type) {
         WidgetType.TodayCourses -> {
-            if (state.todayCourses.isEmpty()) {
+            if (state.cached == null) {
+                DesktopMessage(
+                    if (state.refreshIssue) "刷新失败，打开 App 重试" else "打开一次课表后显示"
+                )
+            } else if (state.todayCourses.isEmpty()) {
                 DesktopMessage("今天没有课")
             } else {
+                if (state.size != DesktopSize.Small) TodayDayTape(state)
                 state.todayCourses.take(if (state.size == DesktopSize.Medium) 2 else 4).forEach {
                     Column(
                         modifier = GlanceModifier.fillMaxWidth()
@@ -233,25 +252,57 @@ private fun GenericDesktop(state: DesktopState) {
                     Spacer(GlanceModifier.height(6.dp))
                 }
             }
+            LastUpdatedLine(state)
         }
         WidgetType.Semester -> {
             val timetable = state.cached?.timetable
-            if (timetable == null) DesktopMessage("打开一次课表后显示")
-            else {
+            if (timetable == null) {
+                DesktopMessage(
+                    if (state.refreshIssue) "刷新失败，打开 App 重试" else "打开一次课表后显示"
+                )
+            } else {
                 Text("第 ${state.currentWeek} 周", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold))
                 Text(semesterText(timetable.xnm, timetable.xqm), style = bodyStyle())
                 Text("本周共 ${state.weekCourses} 门课", style = captionStyle())
+                LastUpdatedLine(state)
             }
         }
         WidgetType.QuickActions -> {
-            Text("点击卡片，打开管院通", style = bodyStyle())
-            listOf("课表与成绩", "考试与选课").forEach {
-                Text(it, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 15.sp, fontWeight = FontWeight.Medium))
-                Spacer(GlanceModifier.height(5.dp))
+            val actions = state.quickActions
+            if (actions.isEmpty()) {
+                DesktopMessage("打开 App 后使用快捷功能")
+            } else {
+                val compact = state.size != DesktopSize.Large
+                val columns = if (state.size == DesktopSize.Small) 1 else 2
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    actions.chunked(columns).forEachIndexed { index, rowActions ->
+                        if (index > 0) Spacer(GlanceModifier.height(if (compact) 3.dp else 6.dp))
+                        Row(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            rowActions.forEach { action ->
+                                QuickActionDesktopCell(
+                                    action = action,
+                                    compact = compact,
+                                    modifier = GlanceModifier.defaultWeight(),
+                                )
+                            }
+                            repeat(columns - rowActions.size) {
+                                Spacer(GlanceModifier.defaultWeight())
+                            }
+                        }
+                    }
+                }
             }
         }
         WidgetType.Accounts -> {
-            state.accounts.forEach { (label, loggedIn) ->
+            val accountLimit = when (state.size) {
+                DesktopSize.Small -> 2
+                DesktopSize.Medium -> 4
+                DesktopSize.Large -> 5
+            }
+            state.accounts.take(accountLimit).forEach { (label, loggedIn) ->
                 Row {
                     Text(label, style = bodyStyle(), modifier = GlanceModifier.defaultWeight())
                     Text(if (loggedIn) "已登录" else "未登录", style = captionStyle())
@@ -259,9 +310,56 @@ private fun GenericDesktop(state: DesktopState) {
                 Spacer(GlanceModifier.height(7.dp))
             }
         }
+        WidgetType.CxSign -> CxSignDesktop(state)
+        WidgetType.CxInbox -> CxInboxDesktop(state)
+        WidgetType.Grades -> GradesDesktop(state)
+        WidgetType.Pu -> PuDesktop(state)
+        WidgetType.CxStudy -> CxStudyDesktop(state)
+
         WidgetType.NextClass -> Unit
     }
     Spacer(GlanceModifier.fillMaxWidth())
+}
+
+@Composable
+private fun QuickActionDesktopCell(
+    action: DesktopQuickAction,
+    compact: Boolean,
+    modifier: GlanceModifier,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = modifier
+            .padding(2.dp)
+            .background(GlanceTheme.colors.secondaryContainer)
+            .cornerRadius(12.dp)
+            .padding(horizontal = 6.dp, vertical = if (compact) 2.dp else 7.dp)
+            .clickable(onClick = actionStartActivityIntent(quickActionIntent(context, action))),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = action.title,
+            style = TextStyle(
+                color = GlanceTheme.colors.onSecondaryContainer,
+                fontSize = if (compact) 12.sp else 13.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            maxLines = 1,
+        )
+    }
+}
+
+/** 桌面卡片上的「上次更新」；刷新失败时明确标出来，但旧数据仍然保留。 */
+@Composable
+private fun LastUpdatedLine(state: DesktopState) {
+    val savedAt = state.cached?.savedAt?.takeIf { it > 0 } ?: return
+    Spacer(GlanceModifier.height(6.dp))
+    Text(
+        text = if (state.refreshIssue) "更新失败 · ${formatDesktopUpdatedLabel(savedAt)}"
+        else formatDesktopUpdatedLabel(savedAt),
+        style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 10.sp),
+        maxLines = 1,
+    )
 }
 
 @Composable

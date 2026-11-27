@@ -42,7 +42,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
@@ -79,8 +78,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -90,6 +92,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -260,6 +265,12 @@ fun OverviewScreen(
                     val isDragged = drag.draggedId == item.id
                     val highlighted = highlightId == item.id
                     val ringColor = MaterialTheme.colorScheme.primary
+                    // 新卡片的入场高亮：主色描边 + 一层很浅的主色洗色，淡入淡出，作为添加成功的即时反馈。
+                    val glowAlpha by animateFloatAsState(
+                        targetValue = if (highlighted) 0.16f else 0f,
+                        animationSpec = tween(durationMillis = 260),
+                        label = "widget-added-glow",
+                    )
                     Box(
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
@@ -272,6 +283,16 @@ fun OverviewScreen(
                                     cornerRadius = CornerRadius(22.dp.toPx()),
                                     style = Stroke(width = 2.dp.toPx()),
                                 )
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                if (glowAlpha > 0f) {
+                                    drawRoundRect(
+                                        color = ringColor.copy(alpha = glowAlpha),
+                                        cornerRadius = CornerRadius(22.dp.toPx()),
+                                        style = Fill,
+                                    )
+                                }
                             }
                             .pointerInput(item.id) {
                                 var pressedQuickTarget: QuickActionTarget? = null
@@ -1249,6 +1270,26 @@ private fun WidgetContent(
             onOpenAccount = onOpenAccount,
             onOpenMine = onOpenMine,
         )
+
+        WidgetType.CxSign -> CxSignWidget(item.size) {
+            FeatureCatalog.byId("cx.sign")?.let(onOpenFeature)
+        }
+
+        WidgetType.CxInbox -> CxInboxWidget(item.size) {
+            FeatureCatalog.byId("cx.notices")?.let(onOpenFeature)
+        }
+
+        WidgetType.Grades -> GradesWidget(item.size, item.id) {
+            FeatureCatalog.byId("jwxt.grades")?.let(onOpenFeature)
+        }
+
+        WidgetType.Pu -> PuWidget(item.size) {
+            FeatureCatalog.byId("pu.activities")?.let(onOpenFeature)
+        }
+
+        WidgetType.CxStudy -> CxStudyWidget(item.size) {
+            FeatureCatalog.byId("cx.courses")?.let(onOpenFeature)
+        }
     }
 }
 
@@ -1258,7 +1299,9 @@ internal fun WidgetCard(
     size: WidgetSize,
     actionText: String? = null,
     onAction: (() -> Unit)? = null,
+    actionIcon: ImageVector? = null,
     actionContent: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
@@ -1268,16 +1311,30 @@ internal fun WidgetCard(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (size == WidgetSize.Small) Modifier.height(128.dp) else Modifier),
+            .then(if (size == WidgetSize.Small) Modifier.height(128.dp) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
         if (size == WidgetSize.Small) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(14.dp),
+                    .padding(
+                        start = 14.dp,
+                        // 标题行右侧有 40dp 图标时，图标自带垂直留白，顶部内边距相应收紧。
+                        top = if (actionIcon != null) 0.dp else 14.dp,
+                        end = 14.dp,
+                        bottom = 14.dp,
+                    ),
             ) {
-                WidgetTitle(title = title, size = size)
-                Spacer(Modifier.height(4.dp))
+                WidgetTitle(
+                    title = title,
+                    size = size,
+                    actionText = actionText,
+                    compact = true,
+                    onAction = onAction,
+                    actionIcon = actionIcon,
+                )
+                Spacer(Modifier.height(if (actionIcon != null) 0.dp else 4.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1304,6 +1361,7 @@ internal fun WidgetCard(
                     actionText = actionText,
                     compact = compactHeader,
                     onAction = onAction,
+                    actionIcon = actionIcon,
                     actionContent = actionContent,
                 )
                 Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
@@ -1320,6 +1378,7 @@ private fun WidgetTitle(
     actionText: String? = null,
     compact: Boolean = false,
     onAction: (() -> Unit)? = null,
+    actionIcon: ImageVector? = null,
     actionContent: (@Composable () -> Unit)? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1335,9 +1394,26 @@ private fun WidgetTitle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (actionContent != null) {
+        if (size == WidgetSize.Small && actionIcon != null && onAction != null) {
+            // 小号卡片没有文字按钮的空间，用 40dp 点按区的图标入口；嵌套 clickable 会先消费点击，
+            // 不会触发整卡点击。
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onAction),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = actionText ?: "编辑",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        } else if (actionContent != null) {
             actionContent()
-        } else if (actionText != null && onAction != null) {
+        } else if (size != WidgetSize.Small && actionText != null && onAction != null) {
             if (compact) {
                 TextButton(
                     onClick = onAction,
@@ -1425,6 +1501,13 @@ private fun TodayCoursesWidget(
 
             else -> {
                 val visible = if (size == WidgetSize.Medium) courses.take(2) else courses
+                TodayTimeline(
+                    courses = courses,
+                    jcTimes = timetable.jcTimes,
+                    visibleCount = visible.size,
+                    now = rememberNow().toLocalTime(),
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     visible.forEach { course ->
                         TodayCourseRow(
@@ -2088,7 +2171,7 @@ private fun WidgetGallery(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "选择要显示在概览里的内容",
+                    text = "点击卡片添加",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -2161,7 +2244,8 @@ private fun sizeHint(size: WidgetSize): String = when (size) {
 /**
  * 真实尺寸的小组件预览：内容、样式、高度都和首页一致。
  *
- * 整块盖一层透明点击区，点哪里都是「添加」，不会误触组件里的按钮。
+ * 预览卡整块盖一层透明点击区，点卡片就是「添加」；面板标题下写明这一点，
+ * 卡片下方只留类型名。读屏时卡片念作「添加<类型名>」，不把动作藏在视觉里。
  */
 @Composable
 private fun WidgetPreview(
@@ -2193,7 +2277,8 @@ private fun WidgetPreview(
                 modifier = Modifier
                     .matchParentSize()
                     .clip(shape)
-                    .clickable(onClick = onAdd),
+                    .clickable(role = Role.Button, onClick = onAdd)
+                    .semantics { contentDescription = "添加${type.title}" },
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -2210,18 +2295,6 @@ private fun WidgetPreview(
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                imageVector = Icons.Outlined.Add,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(15.dp),
-            )
-            Spacer(Modifier.width(2.dp))
-            Text(
-                text = "添加",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
             )
         }
     }
