@@ -63,10 +63,15 @@ import com.sdmu.guanlitong.data.ServiceFeature
 import com.sdmu.guanlitong.data.SdgyPage
 import com.sdmu.guanlitong.data.CxPage
 import com.sdmu.guanlitong.data.PuPage
+import com.sdmu.guanlitong.data.ZhsPage
 import com.sdmu.guanlitong.data.cx.CxCourse
 import com.sdmu.guanlitong.data.cx.CxCredStore
+import com.sdmu.guanlitong.data.cx.CxDocTaskStatus
 import com.sdmu.guanlitong.data.cx.CxRepository
 import com.sdmu.guanlitong.data.cx.CxSignStore
+import com.sdmu.guanlitong.service.BrushTaskRegistry
+import com.sdmu.guanlitong.service.BrushTaskRoutes
+import com.sdmu.guanlitong.service.BrushTaskSnapshot
 import com.sdmu.guanlitong.service.CxKeepAlive
 import com.sdmu.guanlitong.service.CxSignManualNotify
 import com.sdmu.guanlitong.service.CxTaskService
@@ -77,6 +82,13 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SessionRelogin
 import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
 import com.sdmu.guanlitong.data.pu.PuCredStore
+import com.sdmu.guanlitong.data.zhs.ZhsCourse
+import com.sdmu.guanlitong.data.zhs.ZhsRepository
+import com.sdmu.guanlitong.data.zhs.ZhsSessionStore
+import com.sdmu.guanlitong.ui.components.BrushTaskBall
+import com.sdmu.guanlitong.ui.zhs.ZhsBrushProgressScreen
+import com.sdmu.guanlitong.ui.zhs.ZhsCourseDetailScreen
+import com.sdmu.guanlitong.ui.zhs.ZhsCoursesScreen
 import com.sdmu.guanlitong.data.JwxtPage
 import com.sdmu.guanlitong.data.update.UpdateClient
 import com.sdmu.guanlitong.data.update.UpdateInfo
@@ -95,13 +107,13 @@ import com.sdmu.guanlitong.ui.onboarding.OnboardingScreen
 import com.sdmu.guanlitong.ui.overview.OverviewScreen
 import com.sdmu.guanlitong.ui.cx.CxCourseDetailScreen
 import com.sdmu.guanlitong.ui.cx.CxCourseHomeScreen
+import com.sdmu.guanlitong.ui.cx.CxMaterialsScreen
 import com.sdmu.guanlitong.ui.cx.CxCoursesScreen
 import com.sdmu.guanlitong.ui.cx.CxGestureSignScreen
 import com.sdmu.guanlitong.ui.cx.CxInboxScreen
 import com.sdmu.guanlitong.ui.cx.CxKeepAliveGuideDialog
 import com.sdmu.guanlitong.ui.cx.CxSignScreen
 import com.sdmu.guanlitong.ui.cx.CxSignSettingsScreen
-import com.sdmu.guanlitong.ui.cx.CxStudyBall
 import com.sdmu.guanlitong.ui.cx.CxStudyBallPreview
 import com.sdmu.guanlitong.ui.cx.CxStudyBallPreviewState
 import com.sdmu.guanlitong.ui.cx.CxStudyDetailScreen
@@ -138,6 +150,15 @@ private sealed interface Dest {
     data class Pu(val page: PuPage = PuPage.Activities, val activityId: Long? = null) : Dest
     /** 学习通原生页面；[course] 非空表示课程占位详情。 */
     data class Cx(val page: CxPage = CxPage.Courses, val course: CxCourse? = null) : Dest
+
+    /** 知到（智慧树）原生页面。 */
+    data class Zhs(val page: ZhsPage = ZhsPage.Courses) : Dest
+
+    /** 知到课程详情：章节树 + 学习进度。 */
+    data class ZhsDetail(val course: ZhsCourse) : Dest
+
+    /** 知到刷课实时进度页：浮球 / 通知 / 章节页「查看进度」进入，只读任务控制器。 */
+    data object ZhsStudy : Dest
 
     /** 某门课程自己的功能页（课程名 + 模块列表）；不占用 [CxPage]，功能页入口保持原样。 */
     data class CxCourseHome(val course: CxCourse? = null) : Dest
@@ -177,6 +198,8 @@ fun AppRoot(repository: AppRepository) {
     var onboardingPage by rememberSaveable { mutableIntStateOf(0) }
 
     val jwxtSource by repository.settings.jwxtSource.collectAsState()
+    // 多任务刷课浮球的数据源：学习通章节/资料、知到各自注册，互不影响。
+    val brushTasks by BrushTaskRegistry.tasks.collectAsState()
     val jwxtService = ServiceCatalog.byId("jwxt")!!
     val grabService = ServiceCatalog.byId("grab")
     val jwxtServiceUrl = remember(jwxtService) { repository.urlFor(jwxtService) }
@@ -372,6 +395,8 @@ fun AppRoot(repository: AppRepository) {
 
             is FeatureAction.Cx -> goForward(Dest.Cx(action.page))
 
+            is FeatureAction.Zhs -> goForward(Dest.Zhs(action.page))
+
             is FeatureAction.SdgyApp -> {
                 val web = action.action
                 when {
@@ -412,6 +437,15 @@ fun AppRoot(repository: AppRepository) {
             if (featureId == null) return@collect
             FeatureDeepLink.pending.value = null
             FeatureCatalog.byId(featureId)?.let { openFeature(it) }
+        }
+    }
+
+    // 知到刷课通知点击：直接落到实时进度页；已在进度页不重复入栈。
+    LaunchedEffect(Unit) {
+        ZhsDeepLink.pending.collect { wanted ->
+            if (!wanted) return@collect
+            ZhsDeepLink.pending.value = false
+            if (overlay !is Dest.ZhsStudy) goForward(Dest.ZhsStudy)
         }
     }
 
@@ -557,6 +591,7 @@ fun AppRoot(repository: AppRepository) {
                                         SdgySessionStore(context).clear()
                                         PuCredStore(context).clear()
                                         CxCredStore(context).clear()
+                                        ZhsSessionStore(context).clear()
                                     },
                                     jwxtSource = jwxtSource,
                                     versionName = currentVersion,
@@ -731,6 +766,11 @@ fun AppRoot(repository: AppRepository) {
                                 onBack = { goBack() },
                             )
 
+                            CxPage.Materials -> CxMaterialsScreen(
+                                course = dest.course,
+                                onBack = { goBack() },
+                            )
+
                             CxPage.Sign -> CxSignScreen(
                                 onBack = { goBack() },
                                 onOpenSettings = { goForward(Dest.Cx(CxPage.SignSettings)) },
@@ -803,6 +843,26 @@ fun AppRoot(repository: AppRepository) {
                         )
 
                         Dest.CxStudy -> CxStudyDetailScreen(onBack = { goBack() })
+
+                        is Dest.Zhs -> when (dest.page) {
+                            ZhsPage.Courses -> ZhsCoursesScreen(
+                                onBack = { goBack() },
+                                onOpenAccount = { goForward(Dest.Account(ZhsRepository.SERVICE_ID)) },
+                                onOpenCourse = { goForward(Dest.ZhsDetail(it)) },
+                            )
+                        }
+
+                        is Dest.ZhsDetail -> ZhsCourseDetailScreen(
+                            course = dest.course,
+                            onBack = { goBack() },
+                            onOpenAccount = { goForward(Dest.Account(ZhsRepository.SERVICE_ID)) },
+                            onOpenProgress = { goForward(Dest.ZhsStudy) },
+                        )
+
+                        Dest.ZhsStudy -> ZhsBrushProgressScreen(
+                            onBack = { goBack() },
+                            onOpenAccount = { goForward(Dest.Account(ZhsRepository.SERVICE_ID)) },
+                        )
 
                         is Dest.SdgyWeb -> SdgyWebScreen(
                             title = dest.title,
@@ -937,9 +997,42 @@ fun AppRoot(repository: AppRepository) {
                     bottomAvoid = ballBottomAvoid,
                 )
             } else {
-                CxStudyBall(
-                    onOpen = {
-                        if (overlay !is Dest.CxStudy) goForward(Dest.CxStudy)
+                BrushTaskBall(
+                    tasks = brushTasks,
+                    onOpenTask = { task ->
+                        when (task.route) {
+                            BrushTaskRoutes.CX_STUDY ->
+                                if (overlay !is Dest.CxStudy) goForward(Dest.CxStudy)
+
+                            BrushTaskRoutes.ZHS_STUDY ->
+                                if (overlay !is Dest.ZhsStudy) goForward(Dest.ZhsStudy)
+
+                            // 学习通资料：用任务自己带的课程上下文回到该课程的资料页，
+                            // 不跳空页；已经在该课程资料页时不重复入栈。
+                            BrushTaskRoutes.CX_MATERIAL -> {
+                                val context = CxDocTaskStatus.state.value.course
+                                if (context != null) {
+                                    val target = CxCourse(
+                                        courseId = context.courseId,
+                                        clazzId = context.clazzId,
+                                        personId = context.personId,
+                                        name = context.name,
+                                        teacher = "",
+                                        coverUrl = "",
+                                        link = "",
+                                    )
+                                    val current = overlay as? Dest.Cx
+                                    if (current?.page != CxPage.Materials ||
+                                        current.course?.courseId != target.courseId
+                                    ) {
+                                        goForward(Dest.Cx(CxPage.Materials, target))
+                                    }
+                                }
+                            }
+
+                            // 未识别的 route 只展示、不跳转。
+                            else -> Unit
+                        }
                     },
                     modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
                     bottomAvoid = ballBottomAvoid,

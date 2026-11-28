@@ -75,6 +75,7 @@ import com.sdmu.guanlitong.ui.components.ServiceBadge
 import com.sdmu.guanlitong.ui.components.StatusText
 import com.sdmu.guanlitong.ui.format.formatMonthDayTime
 import com.sdmu.guanlitong.ui.jwxt.JwxtLoginPanel
+import com.sdmu.guanlitong.ui.zhs.ZhsAccountSection
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -154,7 +155,7 @@ fun AccountScreen(
             }
 
             // 第二课堂、学习通只用 App 账号，没有网页地址，不需要提示。
-            if (serviceUrl.isBlank() && service.id != "pu" && service.id != "cx") {
+            if (serviceUrl.isBlank() && service.id != "pu" && service.id != "cx" && service.id != "zhs") {
                 WarningCard(
                     text = "这个服务暂时用不了。",
                 )
@@ -229,6 +230,12 @@ fun AccountScreen(
                 )
 
                 service.id == "cx" -> CxLoginSection(
+                    service = service,
+                    account = account,
+                    store = store,
+                )
+
+                service.id == "zhs" -> ZhsAccountSection(
                     service = service,
                     account = account,
                     store = store,

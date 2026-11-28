@@ -27,8 +27,8 @@ data class CxCourseModule(
 /**
  * 课程功能页的模块列表，顺序即展示顺序。
  *
- * 章节刷课是现在唯一已接入的模块；资料、作业等学习通侧能力还没对接，
- * 先如实标成未接入，等对应数据层与页面落地后再把 target 填上。
+ * 章节刷课与资料已接入；作业等学习通侧能力还没对接，先如实标成未接入，
+ * 等对应数据层与页面落地后再把 target 填上。
  */
 val cxCourseModules: List<CxCourseModule> = listOf(
     CxCourseModule(
@@ -43,7 +43,7 @@ val cxCourseModules: List<CxCourseModule> = listOf(
         title = "资料",
         description = "课程资料与课件",
         icon = Icons.Outlined.Description,
-        target = null,
+        target = CxPage.Materials,
     ),
     CxCourseModule(
         id = "works",

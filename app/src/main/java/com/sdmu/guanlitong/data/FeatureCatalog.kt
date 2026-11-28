@@ -6,6 +6,7 @@ import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CastForEducation
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ElectricalServices
@@ -31,7 +32,10 @@ enum class SdgyPage { Hub, Timetable, Pay, Power, Shot }
 enum class PuPage { Activities, Mine, Credit, Friends, PersonalCode, Scan, SignCode }
 
 /** 学习通内置的原生页面。 */
-enum class CxPage { Courses, CourseDetail, Sign, SignSettings, Inbox }
+enum class CxPage { Courses, CourseDetail, Materials, Sign, SignSettings, Inbox }
+
+/** 知到（智慧树）内置的原生页面。 */
+enum class ZhsPage { Courses }
 
 /** 山管官方网页功能，使用与服务端功能表一致的免登路由。 */
 data class SdgyWebAction(
@@ -61,6 +65,9 @@ sealed interface FeatureAction {
 
     /** 学习通内置原生页面。 */
     data class Cx(val page: CxPage) : FeatureAction
+
+    /** 知到（智慧树）内置原生页面。 */
+    data class Zhs(val page: ZhsPage) : FeatureAction
 
     /** 打开某个服务的网页；[url] 为空时用服务配置的地址。 */
     data class Web(val serviceId: String, val url: String? = null) : FeatureAction
@@ -99,6 +106,7 @@ val ServiceFeature.targetServiceId: String
         is FeatureAction.Sdgy -> serviceId
         is FeatureAction.Pu -> serviceId
         is FeatureAction.Cx -> serviceId
+        is FeatureAction.Zhs -> serviceId
         is FeatureAction.SdgyApp -> serviceId
         FeatureAction.Timetable -> serviceId
     }
@@ -273,6 +281,14 @@ ServiceFeature(
             subtitle = "通知 · 签到 · 作业",
             icon = Icons.Outlined.Email,
             action = FeatureAction.Cx(CxPage.Inbox),
+        ),
+        ServiceFeature(
+            id = "zhs.courses",
+            serviceId = "zhs",
+            title = "我的课程",
+            subtitle = "共享课 · 翻转课",
+            icon = Icons.Outlined.CastForEducation,
+            action = FeatureAction.Zhs(ZhsPage.Courses),
         ),
     )
 

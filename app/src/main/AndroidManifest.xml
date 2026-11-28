@@ -137,6 +137,26 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="学习通签到监控与课程刷课后台任务" />
         </service>
+
+        <!-- 学习通资料刷时长的前台服务：进程内跑心跳，通知显示进度与停止入口。 -->
+        <service
+            android:name=".service.CxDocService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="学习通资料阅读进度心跳与停止通知" />
+        </service>
+
+        <!-- 知到定时刷课的常驻通知服务：任务在进程内跑，本服务只发布进度与停止入口。 -->
+        <service
+            android:name=".service.ZhsTaskService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="知到课程刷课后台任务与进度通知" />
+        </service>
     </application>
 
 </manifest>

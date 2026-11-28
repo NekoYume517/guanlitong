@@ -3,6 +3,7 @@ package com.sdmu.guanlitong.data
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CastForEducation
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.School
@@ -63,18 +64,29 @@ SchoolService(
             configurable = false,
             requiresAccount = true,
         ),
+        SchoolService(
+            id = "zhs",
+            name = "知到",
+            summary = "智慧树 · 我的课程",
+            defaultUrl = "",
+            loginMode = LoginMode.CREDENTIAL,
+            icon = Icons.Outlined.CastForEducation,
+            accent = Color(0xFFF07B23),
+            configurable = false,
+            requiresAccount = true,
+        ),
     )
 
     /** 「功能」页顶部的分类：教务系统、山管 App、第二课堂、学习通。 */
     val featureServices: List<SchoolService>
         get() = services.filter {
-            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx"
+            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx" || it.id == "zhs"
         }
 
     /** 「我的」与概览「账号状态」展示需要独立登录的服务；抢课助手只作为数据源。 */
     val accountServices: List<SchoolService>
         get() = services.filter {
-            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx"
+            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx" || it.id == "zhs"
         }
 
     fun byId(id: String): SchoolService? = services.firstOrNull { it.id == id }
