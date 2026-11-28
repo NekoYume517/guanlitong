@@ -136,6 +136,7 @@ object ZhsTaskController {
         stopRequested = false
         speed.choice = choice
         val appContext = context.applicationContext
+        val generationAtStart = ZhsAuthCenter.generation.value
         job = scope.launch {
             try {
                 val repo = repository ?: ZhsRepository(appContext).also { repository = it }
@@ -143,7 +144,13 @@ object ZhsTaskController {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                machine.fail(e.zhsMessage(), expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED)
+                val expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED
+                machine.fail(e.zhsMessage(), expired = expired)
+                // 刷课不自动续跑：人机验证通过后只重登，由用户重新开始任务。
+                // 失败晚于一次成功重登时不再重复弹窗。
+                if (expired && ZhsAuthCenter.generation.value == generationAtStart) {
+                    ZhsAuthCenter.requestRelogin()
+                }
             }
         }
         ZhsTaskService.start(appContext)

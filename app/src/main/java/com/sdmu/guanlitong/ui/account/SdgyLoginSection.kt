@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.AccountDefaults
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.sdgy.SdgyClient
 import com.sdmu.guanlitong.data.sdgy.SdgyException
@@ -79,7 +80,7 @@ internal fun SdgyLoginSection(
     var username by remember { mutableStateOf(account.username) }
     var password by remember { mutableStateOf(store.passwordOf("sdgy").orEmpty()) }
     var passwordVisible by remember { mutableStateOf(false) }
-    var rememberPassword by remember { mutableStateOf(account.hasPassword) }
+    var rememberPassword by remember { mutableStateOf(AccountDefaults.REMEMBER_PASSWORD) }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var messageIsError by remember { mutableStateOf(false) }

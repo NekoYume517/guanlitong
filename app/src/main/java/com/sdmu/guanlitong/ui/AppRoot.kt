@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.BuildConfig
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.AccountDefaults
 import com.sdmu.guanlitong.data.AppRepository
 import com.sdmu.guanlitong.data.CookieUtils
 import com.sdmu.guanlitong.data.FeatureAction
@@ -82,11 +83,14 @@ import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SessionRelogin
 import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
 import com.sdmu.guanlitong.data.pu.PuCredStore
+import com.sdmu.guanlitong.data.zhs.ZhsAuthCenter
 import com.sdmu.guanlitong.data.zhs.ZhsCourse
 import com.sdmu.guanlitong.data.zhs.ZhsRepository
 import com.sdmu.guanlitong.data.zhs.ZhsSessionStore
+import com.sdmu.guanlitong.data.zhs.ZhsStoredAccountProvider
 import com.sdmu.guanlitong.ui.components.BrushTaskBall
 import com.sdmu.guanlitong.ui.zhs.ZhsBrushProgressScreen
+import com.sdmu.guanlitong.ui.zhs.ZhsReloginDialog
 import com.sdmu.guanlitong.ui.zhs.ZhsCourseDetailScreen
 import com.sdmu.guanlitong.ui.zhs.ZhsCoursesScreen
 import com.sdmu.guanlitong.data.JwxtPage
@@ -252,6 +256,11 @@ fun AppRoot(repository: AppRepository) {
     // 保活引导最多出现一次；之后只在设置页「后台保活」区展示入口。
     var keepAliveGuideVisible by remember { mutableStateOf(false) }
     val appContext = context.applicationContext
+
+    // 知到过期自动重登：账号与记住的密码都从本地账号存储里取。
+    LaunchedEffect(Unit) {
+        ZhsAuthCenter.bindProvider(ZhsStoredAccountProvider(appContext))
+    }
 
     fun checkForUpdate(showUpToDate: Boolean) {
         if (updateState is UpdateState.Downloading) return
@@ -885,7 +894,7 @@ fun AppRoot(repository: AppRepository) {
                                     refreshToken = jwxtRefreshToken,
                                     initialUsername = jwxtAccount.username,
                                     initialPassword = savedPassword,
-                                    rememberInitial = jwxtAccount.hasPassword,
+                                    rememberInitial = AccountDefaults.REMEMBER_PASSWORD,
                                     onLoginSuccess = { u, p, r, c -> saveJwxtLogin(u, p, r, c) },
                                     onGrabLogin = openGrabLogin,
                                     onBack = { goBack() },
@@ -908,7 +917,7 @@ fun AppRoot(repository: AppRepository) {
                                     refreshToken = jwxtRefreshToken,
                                     initialUsername = jwxtAccount.username,
                                     initialPassword = savedPassword,
-                                    rememberInitial = jwxtAccount.hasPassword,
+                                    rememberInitial = AccountDefaults.REMEMBER_PASSWORD,
                                     onLoginSuccess = { u, p, r, c -> saveJwxtLogin(u, p, r, c) },
                                     onGrabLogin = openGrabLogin,
                                     onBack = { goBack() },
@@ -920,7 +929,7 @@ fun AppRoot(repository: AppRepository) {
                                     refreshToken = jwxtRefreshToken,
                                     initialUsername = jwxtAccount.username,
                                     initialPassword = savedPassword,
-                                    rememberInitial = jwxtAccount.hasPassword,
+                                    rememberInitial = AccountDefaults.REMEMBER_PASSWORD,
                                     onLoginSuccess = { u, p, r, c -> saveJwxtLogin(u, p, r, c) },
                                     onGrabLogin = openGrabLogin,
                                     onBack = { goBack() },
@@ -932,7 +941,7 @@ fun AppRoot(repository: AppRepository) {
                                     refreshToken = jwxtRefreshToken,
                                     initialUsername = jwxtAccount.username,
                                     initialPassword = savedPassword,
-                                    rememberInitial = jwxtAccount.hasPassword,
+                                    rememberInitial = AccountDefaults.REMEMBER_PASSWORD,
                                     onLoginSuccess = { u, p, r, c -> saveJwxtLogin(u, p, r, c) },
                                     onGrabLogin = openGrabLogin,
                                     onBack = { goBack() },
@@ -1051,6 +1060,9 @@ fun AppRoot(repository: AppRepository) {
                 updateState = UpdateState.Idle
             },
         )
+
+        // 知到会话过期：任何页面抛 EXPIRED 都会拉起这个重登弹窗，成功后各页面自动刷新。
+        ZhsReloginDialog()
 
         // 首次进入且有监控时的保活引导：看完/跳过就写标记，之后不再弹。
         if (keepAliveGuideVisible) {

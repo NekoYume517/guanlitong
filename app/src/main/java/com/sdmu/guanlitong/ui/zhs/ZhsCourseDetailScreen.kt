@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.zhs.ZhsAnswer
 import com.sdmu.guanlitong.data.zhs.ZhsAnswerPage
 import com.sdmu.guanlitong.data.zhs.ZhsChapter
+import com.sdmu.guanlitong.data.zhs.ZhsAuthCenter
 import com.sdmu.guanlitong.data.zhs.ZhsCourse
 import com.sdmu.guanlitong.data.zhs.ZhsCourseDetail
 import com.sdmu.guanlitong.data.zhs.ZhsErrorKind
@@ -274,12 +275,19 @@ private class QaState {
 /** 首次进入或重试时加载；同一结果不会被重复请求。 */
 @Composable
 private fun <T> AutoLoad(active: Boolean, loader: Loader<T>, call: suspend () -> T) {
-    LaunchedEffect(active, loader.retryKey) {
-        if (!active || !loader.pending) return@LaunchedEffect
+    val authGeneration by ZhsAuthCenter.generation.collectAsState()
+    var seenGeneration by remember { mutableIntStateOf(authGeneration) }
+    LaunchedEffect(active, loader.retryKey, authGeneration) {
+        if (!active) return@LaunchedEffect
+        // 自动重登成功一代 +1：即使数据已在，也强制重新拉一次。
+        val force = authGeneration != seenGeneration
+        seenGeneration = authGeneration
+        if (!loader.pending && !force) return@LaunchedEffect
         loader.pending = false
         loader.loading = true
         loader.error = null
         loader.expired = false
+        val generationAtStart = authGeneration
         try {
             loader.data = call()
         } catch (e: CancellationException) {
@@ -287,6 +295,10 @@ private fun <T> AutoLoad(active: Boolean, loader: Loader<T>, call: suspend () ->
         } catch (e: Throwable) {
             loader.error = e.zhsMessage()
             loader.expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED
+            // 失败在自动重登成功之后才回来时，不要用旧请求再拉起一次弹窗。
+            if (loader.expired && authGeneration == generationAtStart) {
+                ZhsAuthCenter.requestRelogin()
+            }
         } finally {
             loader.loading = false
         }
@@ -296,12 +308,18 @@ private fun <T> AutoLoad(active: Boolean, loader: Loader<T>, call: suspend () ->
 /** 问答列表加载（问题列表与 [QaState] 的其他字段共用 pending/retry）。 */
 @Composable
 private fun AutoLoadQuestions(qa: QaState, call: suspend () -> List<ZhsQuestion>) {
-    LaunchedEffect(qa.retryKey) {
-        if (!qa.pending) return@LaunchedEffect
+    val authGeneration by ZhsAuthCenter.generation.collectAsState()
+    var seenGeneration by remember { mutableIntStateOf(authGeneration) }
+    LaunchedEffect(qa.retryKey, authGeneration) {
+        // 自动重登成功后强制重拉，即使问题列表已经在。
+        val force = authGeneration != seenGeneration
+        seenGeneration = authGeneration
+        if (!qa.pending && !force) return@LaunchedEffect
         qa.pending = false
         qa.loading = true
         qa.error = null
         qa.expired = false
+        val generationAtStart = authGeneration
         try {
             qa.questions = call()
         } catch (e: CancellationException) {
@@ -309,6 +327,9 @@ private fun AutoLoadQuestions(qa: QaState, call: suspend () -> List<ZhsQuestion>
         } catch (e: Throwable) {
             qa.error = e.zhsMessage()
             qa.expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED
+            if (qa.expired && authGeneration == generationAtStart) {
+                ZhsAuthCenter.requestRelogin()
+            }
         } finally {
             qa.loading = false
         }
@@ -1376,15 +1397,22 @@ private fun AnswerContent(
     bottomPadding: Dp,
 ) {
     val scope = rememberCoroutineScope()
-    LaunchedEffect(question.id, qa.answersKey) {
+    val authGeneration by ZhsAuthCenter.generation.collectAsState()
+    LaunchedEffect(question.id, qa.answersKey, authGeneration) {
         qa.answersLoading = true
         qa.answersError = null
+        val generationAtStart = authGeneration
         try {
             qa.answers = repo.answers(course, question.id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             qa.answersError = e.zhsMessage()
+            if ((e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED &&
+                authGeneration == generationAtStart
+            ) {
+                ZhsAuthCenter.requestRelogin()
+            }
         } finally {
             qa.answersLoading = false
         }
@@ -1499,6 +1527,9 @@ private fun AnswerContent(
                                 throw e
                             } catch (e: Throwable) {
                                 qa.submitError = e.zhsMessage()
+                                if ((e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED) {
+                                    ZhsAuthCenter.requestRelogin()
+                                }
                             } finally {
                                 qa.submitting = false
                             }

@@ -97,8 +97,25 @@ class ZhsSessionStore(context: Context) : ZhsSessionStorage {
     private fun clean(raw: String): String =
         raw.trim().takeUnless { it.equals("null", ignoreCase = true) }.orEmpty()
 
-    private companion object {
+    companion object {
         const val PREF_NAME = "guanlitong_zhs"
         const val KEY_SESSION = "zhs_session"
+
+        @Volatile
+        private var processStore: ZhsSessionStore? = null
+
+        /**
+         * 进程内共享的会话存储。
+         *
+         * 会话缓存在实例内存里，界面各自 `remember { ZhsRepository(...) }` 时如果各自新建
+         * 一份存储，别的实例重新登录后这些页面的 `loggedIn` 与网络请求都还是旧会话，
+         * 会一直 401 且反复弹重登框。共享一份后，登录/退出立刻对所有页面可见。
+         */
+        fun instance(context: Context): ZhsSessionStore =
+            processStore ?: synchronized(this) {
+                processStore ?: ZhsSessionStore(context.applicationContext).also {
+                    processStore = it
+                }
+            }
     }
 }

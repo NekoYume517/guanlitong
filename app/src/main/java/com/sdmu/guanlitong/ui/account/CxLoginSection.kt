@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.AccountDefaults
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.cx.CxRepository
@@ -46,8 +47,8 @@ import kotlinx.coroutines.launch
  * 「我的 → 学习通」账号区。
  *
  * - 手机号 + 密码原生登录；
- * - 「记住密码」默认不勾选：勾选后用 Android Keystore 加密保存，供登录过期时
- *   自动重登；不勾选时登录成功即丢弃密码，取消勾选会立刻清掉本机密码；
+ * - 「记住密码」默认勾选：用 Android Keystore 加密保存，供登录过期时自动重登；
+ *   用户取消勾选时登录成功即丢弃密码，取消勾选会立刻清掉本机密码；
  * - 登录后只显示脱敏手机号与「退出登录」；请求失败（含 401）不会清会话或密码，
  *   只有用户主动退出才一起清。
  */
@@ -67,7 +68,7 @@ fun CxLoginSection(
 
     var phone by remember(sid) { mutableStateOf(repo.phone.orEmpty().ifBlank { current.username }) }
     var password by remember(sid) { mutableStateOf(savedPassword.orEmpty()) }
-    var rememberPassword by remember(sid) { mutableStateOf(savedPassword != null) }
+    var rememberPassword by remember(sid) { mutableStateOf(AccountDefaults.REMEMBER_PASSWORD) }
     // 已登录卡片的状态说明文案只取决于「本机是否还留着密码」，与表单开关分开记。
     var remembered by remember(sid) { mutableStateOf(savedPassword != null) }
     var passwordVisible by remember { mutableStateOf(false) }
