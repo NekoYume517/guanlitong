@@ -75,6 +75,7 @@ class CxTaskService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(TAG, "service created")
         // 刷课进度落盘给桌面小组件；签到启动时初始状态为空，persistStudySnapshot 会跳过。
         scope.launch {
             CxTaskStatus.state.collect { persistStudySnapshot(it) }
@@ -140,11 +141,26 @@ class CxTaskService : Service() {
                 val onlyJobid = intent.getStringExtra(EXTRA_JOBID)?.takeIf { it.isNotBlank() }
                 startForegroundNotification("${course.name} · 准备中")
                 job?.cancel()
-                job = scope.launch { runStudy(course, onlyJobid) }
+                job = scope.launch {
+                    // 每个 job 自己的锁实例：重复开始会先 cancel 旧 job，旧 job 的 finally
+                    // 不能把新 job 刚拿到的锁释放掉。
+                    val wakeLock = BrushWakeLock.create(this@CxTaskService, WAKE_LOCK_TAG)
+                    if (wakeLock.acquire()) {
+                        Log.i(TAG, "wake lock acquired")
+                    } else {
+                        Log.w(TAG, "wake lock unavailable")
+                    }
+                    try {
+                        runStudy(course, onlyJobid)
+                    } finally {
+                        // 正常结束、取消、异常都走这里；进程被杀时锁随进程一起释放。
+                        wakeLock.release()
+                    }
+                }
             }
         }
-        // 默认粘性：签到监控或刷课被系统杀掉后由系统重新拉起，null intent 分支
-        // 会按当前登录/开关状态决定恢复签到还是退出。
+        // 默认粘性：被系统杀掉后由系统重新拉起。null intent 分支只恢复签到监控，
+        // 刷课 job 不随进程重启恢复；没有可恢复的监控就退出。
         return START_STICKY
     }
 
@@ -153,6 +169,7 @@ class CxTaskService : Service() {
      * 5 秒后用闹钟广播再确认一次。登录失效或开关关闭就不排。
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.i(TAG, "task removed, study=${job?.isActive} sign=${signJob?.isActive}")
         try {
             val appContext = applicationContext
             val monitorEnabled = CxSignStore(appContext).settings().monitorEnabled
@@ -203,6 +220,7 @@ class CxTaskService : Service() {
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "service destroyed, study=${job?.isActive} sign=${signJob?.isActive}")
         signLoop.end()
         job?.cancel()
         signJob?.cancel()
@@ -728,6 +746,7 @@ private fun handleEvent(event: CxStudyEvent) {
 
     companion object {
         private const val TAG = "CxTaskService"
+        private const val WAKE_LOCK_TAG = "guanlitong:cx-study"
         private const val CHANNEL_ID = "cx_task"
         private const val NOTIFICATION_ID = 2001
 

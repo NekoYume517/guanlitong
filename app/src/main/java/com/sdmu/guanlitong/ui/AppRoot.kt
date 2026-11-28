@@ -82,6 +82,7 @@ import com.sdmu.guanlitong.data.jwxt.JwxtOrigin
 import com.sdmu.guanlitong.data.jwxt.JwxtSource
 import com.sdmu.guanlitong.data.jwxt.SessionRelogin
 import com.sdmu.guanlitong.data.sdgy.SdgySessionStore
+import com.sdmu.guanlitong.data.srun.SrunRepository
 import com.sdmu.guanlitong.data.pu.PuCredStore
 import com.sdmu.guanlitong.data.zhs.ZhsAuthCenter
 import com.sdmu.guanlitong.data.zhs.ZhsCourse
@@ -136,6 +137,7 @@ import com.sdmu.guanlitong.ui.sdgy.SdgyPowerScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyShotScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyTimetableScreen
 import com.sdmu.guanlitong.ui.sdgy.SdgyWebScreen
+import com.sdmu.guanlitong.ui.srun.SrunScreen
 import com.sdmu.guanlitong.ui.update.UpdateDialog
 import com.sdmu.guanlitong.ui.update.UpdateState
 import com.sdmu.guanlitong.ui.web.ServiceWebScreen
@@ -163,6 +165,9 @@ private sealed interface Dest {
 
     /** 知到刷课实时进度页：浮球 / 通知 / 章节页「查看进度」进入，只读任务控制器。 */
     data object ZhsStudy : Dest
+
+    /** 校园网认证：独立的账号输入与门户状态页，不进入其他服务的账号面板。 */
+    data object Srun : Dest
 
     /** 某门课程自己的功能页（课程名 + 模块列表）；不占用 [CxPage]，功能页入口保持原样。 */
     data class CxCourseHome(val course: CxCourse? = null) : Dest
@@ -405,6 +410,8 @@ fun AppRoot(repository: AppRepository) {
             is FeatureAction.Cx -> goForward(Dest.Cx(action.page))
 
             is FeatureAction.Zhs -> goForward(Dest.Zhs(action.page))
+
+            FeatureAction.Srun -> goForward(Dest.Srun)
 
             is FeatureAction.SdgyApp -> {
                 val web = action.action
@@ -871,6 +878,11 @@ fun AppRoot(repository: AppRepository) {
                         Dest.ZhsStudy -> ZhsBrushProgressScreen(
                             onBack = { goBack() },
                             onOpenAccount = { goForward(Dest.Account(ZhsRepository.SERVICE_ID)) },
+                        )
+
+                        Dest.Srun -> SrunScreen(
+                            accounts = repository.accounts,
+                            onBack = { goBack() },
                         )
 
                         is Dest.SdgyWeb -> SdgyWebScreen(

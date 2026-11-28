@@ -112,6 +112,8 @@ data class CxDocTaskState(
     val message: String = "",
     val fatalError: String? = null,
     val startedAt: Long = 0L,
+    /** 最近一次状态变化的时间，日志里用来判断心跳是否还在推进。 */
+    val updatedAt: Long = 0L,
 ) {
     val courseName: String get() = course?.name.orEmpty()
 
@@ -160,12 +162,13 @@ object CxDocTaskStatus {
             maxHeight = pageNum * 100,
             message = "准备中",
             startedAt = nowMs,
+            updatedAt = nowMs,
         )
         publish()
     }
 
     internal fun update(transform: (CxDocTaskState) -> CxDocTaskState) {
-        _state.value = transform(_state.value)
+        _state.value = transform(_state.value).copy(updatedAt = System.currentTimeMillis())
         publish()
     }
 
@@ -174,6 +177,7 @@ object CxDocTaskStatus {
             running = false,
             message = message,
             fatalError = fatalError,
+            updatedAt = System.currentTimeMillis(),
         )
         publish()
     }

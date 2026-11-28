@@ -61,6 +61,11 @@ class CxDocService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        Log.i(TAG, "service created")
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
         when (intent?.action) {
@@ -86,7 +91,20 @@ class CxDocService : Service() {
                 CxDocTaskStatus.start(args.toCourse(), args.toItem(), args.speed, pageNum = 0)
                 startForegroundNotification("${args.docName} · 准备中")
                 job?.cancel()
-                job = scope.launch { runDoc(args) }
+                job = scope.launch {
+                    // 每个 job 自己的锁：上一轮被 cancel 的收尾不会误放新任务的锁。
+                    val wakeLock = BrushWakeLock.create(this@CxDocService, WAKE_LOCK_TAG)
+                    if (wakeLock.acquire()) {
+                        Log.i(TAG, "wake lock acquired")
+                    } else {
+                        Log.w(TAG, "wake lock unavailable")
+                    }
+                    try {
+                        runDoc(args)
+                    } finally {
+                        wakeLock.release()
+                    }
+                }
             }
 
             else -> {
@@ -98,7 +116,14 @@ class CxDocService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // 划卡不主动停任务；只留痕，便于区分「用户划掉」与「系统杀进程」。
+        Log.i(TAG, "task removed, running=${job?.isActive}")
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        Log.i(TAG, "service destroyed, running=${job?.isActive}")
         job?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -325,6 +350,7 @@ class CxDocService : Service() {
 
     companion object {
         private const val TAG = "CxDocService"
+        private const val WAKE_LOCK_TAG = "guanlitong:cx-material"
         private const val CHANNEL_ID = CxDocNoticeBuilder.PROGRESS_CHANNEL_ID
         private const val NOTIFICATION_ID = 2305
         private const val FINAL_NOTIFICATION_ID = 2306

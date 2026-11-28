@@ -8,6 +8,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.sdmu.guanlitong.data.AppRepository
 import com.sdmu.guanlitong.data.SessionKeeper
+import com.sdmu.guanlitong.data.srun.SrunAutoAuthMonitor
+import com.sdmu.guanlitong.data.srun.SrunAutoResult
+import com.sdmu.guanlitong.service.SrunAutoNotifier
 import com.sdmu.guanlitong.ui.AppRoot
 import com.sdmu.guanlitong.ui.CxDeepLink
 import com.sdmu.guanlitong.ui.FeatureDeepLink
@@ -17,6 +20,12 @@ import com.sdmu.guanlitong.widget.refreshDesktopWidgets
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    /** 注册系统网络回调：应用进程存活时响应 Wi-Fi 变化，不启动定时任务。 */
+    private var srunAutoAuth: SrunAutoAuthMonitor? = null
+
+    /** 同进程内页面开关和编辑后的凭据变化同步到唯一监听器。 */
+    fun syncSrunAutoAuth() = srunAutoAuth?.syncSetting() ?: Unit
 
     /** App 已在前台 / 后台时点通知：singleTop 复用实例，新 intent 走这里。 */
     override fun onNewIntent(intent: Intent) {
@@ -37,6 +46,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        srunAutoAuth?.dispose()
+        srunAutoAuth = null
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -45,6 +60,13 @@ class MainActivity : ComponentActivity() {
         FeatureDeepLink.pending.value = FeatureDeepLink.routeOf(intent)
         ZhsDeepLink.pending.value = ZhsDeepLink.routeOf(intent)
         val repository = AppRepository(applicationContext)
+        srunAutoAuth = SrunAutoAuthMonitor(applicationContext, lifecycleScope) { result, _ ->
+            SrunAutoNotifier.notify(
+                this,
+                success = result is SrunAutoResult.Success,
+                detail = (result as? SrunAutoResult.Failure)?.message.orEmpty(),
+            )
+        }.also { it.observeSetting() }
         setContent {
             GuanLiTongTheme {
                 AppRoot(repository)
