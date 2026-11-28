@@ -26,8 +26,8 @@ android {
         applicationId = "com.sdmu.guanlitong"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.4.0"
+        versionCode = 16
+        versionName = "1.4.1"
     }
 
     signingConfigs {
