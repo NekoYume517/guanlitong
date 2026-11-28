@@ -28,5 +28,17 @@
                 <action android:name="com.sdmu.guanlitong.debug.HIDE_STUDY_BALL" />
             </intent-filter>
         </receiver>
+
+        <!--
+          知到过期链路调试：清会话但保留账号/密码，下一次知到请求即抛 EXPIRED，
+          用来真机复核自动重登弹窗。仅 debug 构建存在。
+        -->
+        <receiver
+            android:name=".debug.ZhsReloginDebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.sdmu.guanlitong.debug.EXPIRE_ZHS_SESSION" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

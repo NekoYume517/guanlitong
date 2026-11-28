@@ -67,6 +67,28 @@ class ZhsTaskNoticeTest {
     }
 
     @Test
+    fun expiredStopsTaskAndPointsToAutoRelogin() {
+        val notice = ZhsTaskNoticeBuilder.complete(
+            ZhsTaskState(
+                mode = ZhsTaskMode.BATCH,
+                running = false,
+                courseName = "形势与政策",
+                target = 1500,
+                gained = 120,
+                expired = true,
+            ),
+        )
+
+        assertEquals(ZhsTaskNoticeBuilder.SOCIAL_CHANNEL_ID, notice.channelId)
+        assertEquals(ZhsTaskNoticeBuilder.CATEGORY_SOCIAL, notice.category)
+        assertEquals(ZhsTaskNoticeBuilder.PRIORITY_MAX, notice.priority)
+        assertTrue(notice.title.contains("登录已过期"))
+        assertEquals(ZhsTaskNoticeBuilder.EXPIRED_TEXT, notice.text)
+        assertTrue(notice.text.contains("自动重新登录"))
+        assertTrue(notice.text.contains("本次刷课已停止"))
+    }
+
+    @Test
     fun singleItemHasNoTargetWording() {
         val notice = ZhsTaskNoticeBuilder.complete(
             ZhsTaskState(

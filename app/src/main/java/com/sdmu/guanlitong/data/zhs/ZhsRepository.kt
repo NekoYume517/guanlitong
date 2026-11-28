@@ -64,7 +64,7 @@ class ZhsRepository(
 ) {
 
     constructor(context: Context, accounts: AccountStore? = null) :
-        this(ZhsSessionStore(context.applicationContext), accounts)
+        this(ZhsSessionStore.instance(context.applicationContext), accounts)
 
     val loggedIn: Boolean get() = sessions.loggedIn
 

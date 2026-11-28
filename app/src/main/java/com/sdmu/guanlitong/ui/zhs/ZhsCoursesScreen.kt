@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.zhs.ZhsCourse
 import com.sdmu.guanlitong.data.zhs.ZhsCourseList
 import com.sdmu.guanlitong.data.zhs.ZhsErrorKind
+import com.sdmu.guanlitong.data.zhs.ZhsAuthCenter
 import com.sdmu.guanlitong.data.zhs.ZhsException
 import com.sdmu.guanlitong.data.zhs.ZhsHomework
 import com.sdmu.guanlitong.data.zhs.ZhsRepository
@@ -83,28 +85,44 @@ fun ZhsCoursesScreen(
     var expired by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var tab by remember { mutableIntStateOf(0) }
+    // 自动重登成功一代 +1：课程与作业一起重新拉取。
+    val authGeneration by ZhsAuthCenter.generation.collectAsState()
+    // 本机记着账号却已经没有会话（例如会话被清掉）时，同样走自动重登，
+    // 不再要求用户绕到「我的 → 知到」手动登录；取消后由下面的按钮兜底。
+    val rememberedUsername = remember(loggedIn, authGeneration) {
+        ZhsAuthCenter.rememberedUsername()
+    }
+    LaunchedEffect(loggedIn, authGeneration) {
+        if (!loggedIn && rememberedUsername.isNotBlank()) ZhsAuthCenter.requestRelogin()
+    }
 
     var homework by remember { mutableStateOf<List<ZhsHomework>?>(null) }
     var homeworkLoading by remember { mutableStateOf(false) }
     var homeworkError by remember { mutableStateOf<String?>(null) }
     var homeworkKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(tab, refreshKey, homeworkKey, loggedIn) {
+    LaunchedEffect(tab, refreshKey, homeworkKey, loggedIn, authGeneration) {
         if (!loggedIn || tab != 3) return@LaunchedEffect
         homeworkLoading = true
         homeworkError = null
+        val generationAtStart = authGeneration
         try {
             homework = repo.homework()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             homeworkError = e.zhsMessage()
+            if ((e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED &&
+                authGeneration == generationAtStart
+            ) {
+                ZhsAuthCenter.requestRelogin()
+            }
         } finally {
             homeworkLoading = false
         }
     }
 
-    LaunchedEffect(refreshKey, loggedIn) {
+    LaunchedEffect(refreshKey, loggedIn, authGeneration) {
         if (!loggedIn) return@LaunchedEffect
         loading = true
         error = null
@@ -116,6 +134,7 @@ fun ZhsCoursesScreen(
         } catch (e: Throwable) {
             error = e.zhsMessage()
             expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED
+            if (expired) ZhsAuthCenter.requestRelogin()
         } finally {
             loading = false
         }
@@ -158,7 +177,11 @@ fun ZhsCoursesScreen(
                 else -> (list?.shared.orEmpty() + list?.flipped.orEmpty())
             }
             when {
-                !loggedIn -> NotLoggedIn(onOpenAccount)
+                !loggedIn -> NotLoggedIn(
+                    hasRememberedAccount = rememberedUsername.isNotBlank(),
+                    onRelogin = { ZhsAuthCenter.requestRelogin() },
+                    onOpenAccount = onOpenAccount,
+                )
 
                 tab == 3 -> HomeworkContent(
                     list = homework,
@@ -180,7 +203,10 @@ fun ZhsCoursesScreen(
 
                 error != null && list == null -> {
                     if (expired) {
-                        ExpiredMessage(onOpenAccount)
+                        ExpiredMessage(
+                            onRelogin = { ZhsAuthCenter.requestRelogin() },
+                            onOpenAccount = onOpenAccount,
+                        )
                     } else {
                         SdgyMessage(
                             text = error.orEmpty(),
@@ -247,7 +273,11 @@ fun ZhsCoursesScreen(
 }
 
 @Composable
-private fun NotLoggedIn(onOpenAccount: () -> Unit) {
+private fun NotLoggedIn(
+    hasRememberedAccount: Boolean,
+    onRelogin: () -> Unit,
+    onOpenAccount: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -256,18 +286,27 @@ private fun NotLoggedIn(onOpenAccount: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "请先在「我的 → 知到」登录",
+            if (hasRememberedAccount) {
+                "知到需要重新登录，完成人机验证后会使用记住的账号自动登录"
+            } else {
+                "请先在「我的 → 知到」登录"
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onOpenAccount) { Text("去登录") }
+        if (hasRememberedAccount) {
+            TextButton(onClick = onRelogin) { Text("重新登录") }
+            TextButton(onClick = onOpenAccount) { Text("切换账号") }
+        } else {
+            TextButton(onClick = onOpenAccount) { Text("去登录") }
+        }
     }
 }
 
 @Composable
-private fun ExpiredMessage(onOpenAccount: () -> Unit) {
+private fun ExpiredMessage(onRelogin: () -> Unit, onOpenAccount: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -276,13 +315,14 @@ private fun ExpiredMessage(onOpenAccount: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "登录已过期，请重新登录知到",
+            "登录已过期，完成人机验证后将自动重新登录",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onOpenAccount) { Text("去重新登录") }
+        TextButton(onClick = onRelogin) { Text("重新登录") }
+        TextButton(onClick = onOpenAccount) { Text("切换账号") }
     }
 }
 

@@ -29,6 +29,9 @@ object ZhsTaskNoticeBuilder {
     /** 与 NotificationCompat.PRIORITY_MAX 一致。 */
     const val PRIORITY_MAX = 2
 
+    /** 刷课中登录过期：任务停止，人机验证通过后自动重登。 */
+    const val EXPIRED_TEXT = "知到登录已过期，完成人机验证后将自动重新登录；本次刷课已停止，请重新开始。"
+
     /** 任务结束（含滑块、异常、达标/未达标）时的通知。 */
     fun complete(state: ZhsTaskState): ZhsTaskNotice {
         val course = state.courseName.ifBlank { "知到课程" }
@@ -36,6 +39,11 @@ object ZhsTaskNoticeBuilder {
         val title: String
         val text: String
         when {
+            state.expired -> {
+                title = "知到 · $course · 登录已过期"
+                text = EXPIRED_TEXT
+            }
+
             state.captcha -> {
                 title = "知到 · $course · 需要滑块验证"
                 text = "本次新增 $gained。请前往智慧树 App 完成验证后再重新开始。"

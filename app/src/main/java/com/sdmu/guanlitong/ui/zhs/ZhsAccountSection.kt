@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.AccountDefaults
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.SchoolService
 import com.sdmu.guanlitong.data.zhs.ZhsRepository
@@ -49,8 +50,8 @@ import kotlinx.coroutines.launch
  *
  * - 原生表单输入账号密码，点登录后弹出易盾滑块，由真人完成验证；
  * - `validate` 拿到后连同账号密码一次性提交，密码不打印、不写日志；
- * - 「记住密码」默认关闭，勾选后用 AccountStore（Android Keystore）加密保存；
- *   知到不做后台静默重登，保存的密码只用于下次手动登录时回填；
+ * - 「记住密码」默认勾选，用 AccountStore（Android Keystore）加密保存；
+ *   接口 401 / 登录过期时据此自动回填账号并重新登录；
  * - 登录后只显示脱敏账号与「退出登录」，退出会清掉会话和本机密码。
  */
 @Composable
@@ -74,7 +75,7 @@ fun ZhsAccountSection(
         mutableStateOf(repo.account.orEmpty().ifBlank { current.username })
     }
     var password by remember(sid) { mutableStateOf(savedPassword.orEmpty()) }
-    var rememberPassword by remember(sid) { mutableStateOf(savedPassword != null) }
+    var rememberPassword by remember(sid) { mutableStateOf(AccountDefaults.REMEMBER_PASSWORD) }
     var passwordVisible by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var captchaVisible by remember { mutableStateOf(false) }
@@ -143,9 +144,9 @@ fun ZhsAccountSection(
             )
             Text(
                 if (rememberPassword) {
-                    "会话与密码都加密保存在本机；密码只在下一次手动登录时回填。"
+                    "会话与密码都加密保存在本机；登录过期时会自动弹出验证并回填账号。"
                 } else {
-                    "会话加密保存在本机；密码没有保存。知到不会后台静默重登，登录过期时需要重新验证。"
+                    "会话加密保存在本机；密码没有保存，登录过期时需要手动输入密码。"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

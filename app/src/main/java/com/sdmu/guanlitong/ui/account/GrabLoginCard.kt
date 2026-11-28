@@ -42,6 +42,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sdmu.guanlitong.data.Account
+import com.sdmu.guanlitong.data.AccountDefaults
 import com.sdmu.guanlitong.data.AccountStore
 import com.sdmu.guanlitong.data.ApiClient
 import com.sdmu.guanlitong.data.CookieUtils
@@ -72,7 +73,7 @@ fun GrabLoginCard(
     }
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberPassword by remember(account.username, account.hasPassword) {
-        mutableStateOf(account.hasPassword)
+        mutableStateOf(AccountDefaults.REMEMBER_PASSWORD)
     }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
