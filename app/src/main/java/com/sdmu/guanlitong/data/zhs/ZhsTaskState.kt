@@ -62,12 +62,41 @@ data class ZhsTaskState(
     val summary: String? = null,
     val error: String? = null,
     val expired: Boolean = false,
+    /** 最近一次状态变化的时间，日志里用来判断任务是否还在推进。 */
+    val updatedAt: Long = 0,
 ) {
     val speedText: String get() = speedLabel(speed)
 
     /** 达标进度 0..100；没有目标时恒为 0。 */
     val percent: Int
         get() = if (target > 0) min(100, gained * 100 / target) else 0
+
+    /**
+     * 本轮是否已经有终态结果。
+     *
+     * 区分「还没开始」（mode 仍是 NONE）与「已经结束」：前台服务只有在后者时
+     * 才发终态通知并停掉自己，避免启动瞬间把「未开始」误判成「已结束」。
+     */
+    val hasResult: Boolean
+        get() = mode != ZhsTaskMode.NONE && !running
+}
+
+/** 前台服务读到某个状态时该做什么。 */
+enum class ZhsServicePhase {
+    /** 任务还没开始：保持前台继续等状态变化，不发终态、不停服务。 */
+    WAIT,
+
+    /** 任务在跑：续报进度并持有唤醒锁。 */
+    RUNNING,
+
+    /** 已有终态结果：发终态通知、释放唤醒锁、停服务。 */
+    FINISHED,
+}
+
+fun ZhsTaskState.servicePhase(): ZhsServicePhase = when {
+    running -> ZhsServicePhase.RUNNING
+    hasResult -> ZhsServicePhase.FINISHED
+    else -> ZhsServicePhase.WAIT
 }
 
 /** 倍速展示文案，与旧前端 `brushSpeed.label()` 一致。 */
@@ -101,39 +130,43 @@ class ZhsTaskStateMachine(
     val state: StateFlow<ZhsTaskState> = _state.asStateFlow()
 
     fun beginBatch(courseId: Long, courseName: String, targetSec: Int, speed: ZhsSpeedChoice) {
-        _state.value = ZhsTaskState(
-            mode = ZhsTaskMode.BATCH,
-            running = true,
-            startedAt = clock(),
-            courseId = courseId,
-            courseName = courseName,
-            target = targetSec,
-            speed = speed,
-            log = listOf("准备开始..."),
+        emit(
+            ZhsTaskState(
+                mode = ZhsTaskMode.BATCH,
+                running = true,
+                startedAt = clock(),
+                courseId = courseId,
+                courseName = courseName,
+                target = targetSec,
+                speed = speed,
+                log = listOf("准备开始..."),
+            ),
         )
     }
 
     fun beginItem(courseId: Long, courseName: String, item: ZhsFlatItem, speed: ZhsSpeedChoice) {
-        _state.value = ZhsTaskState(
-            mode = ZhsTaskMode.ITEM,
-            running = true,
-            startedAt = clock(),
-            courseId = courseId,
-            courseName = courseName,
-            target = 0,
-            current = "1/1",
-            currentName = item.name,
-            totalLessons = 1,
-            speed = speed,
-            lessons = mapOf(
-                item.lessonId to ZhsLessonTask(
-                    name = item.name,
-                    total = item.sec,
-                    status = ZhsLessonStatus.RUNNING,
-                    index = "1",
+        emit(
+            ZhsTaskState(
+                mode = ZhsTaskMode.ITEM,
+                running = true,
+                startedAt = clock(),
+                courseId = courseId,
+                courseName = courseName,
+                target = 0,
+                current = "1/1",
+                currentName = item.name,
+                totalLessons = 1,
+                speed = speed,
+                lessons = mapOf(
+                    item.lessonId to ZhsLessonTask(
+                        name = item.name,
+                        total = item.sec,
+                        status = ZhsLessonStatus.RUNNING,
+                        index = "1",
+                    ),
                 ),
+                log = listOf("准备开始..."),
             ),
-            log = listOf("准备开始..."),
         )
     }
 
@@ -173,34 +206,38 @@ class ZhsTaskStateMachine(
             log = append(log, "共 ${progress.total} 个视频, 目标 ${st.target / 60} 分钟")
         }
         val done = progress.status == ZhsStudyStatus.DONE
-        _state.value = st.copy(
-            gained = if (done) st.gained + progress.addedSec else st.gained,
-            lessonsDone = if (done) st.lessonsDone + 1 else st.lessonsDone,
-            totalLessons = totalLessons,
-            current = if (progress.round > 0) "第${progress.round}轮" else "${progress.index}/${progress.total}",
-            currentName = lessonName,
-            currentProgress = when {
-                done -> 100
-                progress.round == 0 -> progress.percent
-                else -> st.currentProgress
-            },
-            captcha = st.captcha || progress.status == ZhsStudyStatus.CAPTCHA,
-            lessons = st.lessons + (progress.lessonId to lesson),
-            items = st.items + ((progress.lessonId to progress.lessonVideoId) to progress),
-            log = log,
+        emit(
+            st.copy(
+                gained = if (done) st.gained + progress.addedSec else st.gained,
+                lessonsDone = if (done) st.lessonsDone + 1 else st.lessonsDone,
+                totalLessons = totalLessons,
+                current = if (progress.round > 0) "第${progress.round}轮" else "${progress.index}/${progress.total}",
+                currentName = lessonName,
+                currentProgress = when {
+                    done -> 100
+                    progress.round == 0 -> progress.percent
+                    else -> st.currentProgress
+                },
+                captcha = st.captcha || progress.status == ZhsStudyStatus.CAPTCHA,
+                lessons = st.lessons + (progress.lessonId to lesson),
+                items = st.items + ((progress.lessonId to progress.lessonVideoId) to progress),
+                log = log,
+            ),
         )
     }
 
     fun onLog(message: String) {
         val st = _state.value
-        _state.value = st.copy(log = append(st.log, message))
+        emit(st.copy(log = append(st.log, message)))
     }
 
     fun chooseSpeed(choice: ZhsSpeedChoice) {
         val st = _state.value
-        _state.value = st.copy(
-            speed = choice,
-            log = append(st.log, "切换倍速: ${speedLabel(choice)}"),
+        emit(
+            st.copy(
+                speed = choice,
+                log = append(st.log, "切换倍速: ${speedLabel(choice)}"),
+            ),
         )
     }
 
@@ -208,7 +245,7 @@ class ZhsTaskStateMachine(
     fun stop() {
         val st = _state.value
         if (!st.running) return
-        _state.value = st.copy(log = append(st.log, "用户手动停止"))
+        emit(st.copy(log = append(st.log, "用户手动停止")))
     }
 
     fun finish(outcome: ZhsStudyOutcome) {
@@ -231,27 +268,36 @@ class ZhsTaskStateMachine(
                 else "结束: 累计新增 ${formatSpan(outcome.addedSec)}",
             )
         }
-        _state.value = st.copy(
-            running = false,
-            gained = max(st.gained, outcome.addedSec),
-            current = "",
-            currentName = "",
-            captcha = st.captcha || outcome.captcha,
-            summary = summary,
-            log = log,
+        emit(
+            st.copy(
+                running = false,
+                gained = max(st.gained, outcome.addedSec),
+                current = "",
+                currentName = "",
+                captcha = st.captcha || outcome.captcha,
+                summary = summary,
+                log = log,
+            ),
         )
     }
 
     fun fail(message: String, expired: Boolean = false) {
         val st = _state.value
-        _state.value = st.copy(
-            running = false,
-            current = "",
-            currentName = "",
-            error = message,
-            expired = expired,
-            log = append(st.log, "异常: $message"),
+        emit(
+            st.copy(
+                running = false,
+                current = "",
+                currentName = "",
+                error = message,
+                expired = expired,
+                log = append(st.log, "异常: $message"),
+            ),
         )
+    }
+
+    /** 所有状态写入的唯一出口：顺手盖上最近更新时间。 */
+    private fun emit(state: ZhsTaskState) {
+        _state.value = state.copy(updatedAt = clock())
     }
 
     private fun append(log: List<String>, message: String): List<String> =

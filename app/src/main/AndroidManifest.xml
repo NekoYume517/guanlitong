@@ -19,6 +19,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+        刷课任务运行期间持部分唤醒锁：前台服务不保证 CPU 不休眠，
+        息屏后 delay 与联网都会被系统挂起，任务会表现为「不动」。
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 设备重启后若已登录且签到实时提醒开着，自动恢复签到监控。 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 心跳兜底优先使用精确闹钟；无授权时自动退化为非精确。 -->

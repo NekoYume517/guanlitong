@@ -13,15 +13,18 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.sdmu.guanlitong.MainActivity
 import com.sdmu.guanlitong.R
+import com.sdmu.guanlitong.data.zhs.ZhsServicePhase
 import com.sdmu.guanlitong.data.zhs.ZhsTaskController
 import com.sdmu.guanlitong.data.zhs.ZhsTaskMode
 import com.sdmu.guanlitong.data.zhs.ZhsTaskNoticeBuilder
 import com.sdmu.guanlitong.data.zhs.ZhsTaskState
 import com.sdmu.guanlitong.data.zhs.formatSpan
+import com.sdmu.guanlitong.data.zhs.servicePhase
 import com.sdmu.guanlitong.ui.ZhsDeepLink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,9 +52,19 @@ class ZhsTaskService : Service() {
     private var lastPostedText: String? = null
     private var lastPostedAtMillis = 0L
 
+    /** 任务运行期间持锁；服务没跑任务时完全不创建它。 */
+    private var wakeLock: BrushWakeLock? = null
+    private var lastPhase: ZhsServicePhase? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        Log.i(TAG, "service created")
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "start action=${intent?.action}")
         return when (intent?.action) {
             ACTION_STOP -> {
                 ZhsTaskController.stop()
@@ -66,7 +79,15 @@ class ZhsTaskService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // 划卡不主动停任务：前台服务在，任务照常跑；这里只留痕，便于事后定位。
+        Log.i(TAG, "task removed, running=${ZhsTaskController.state.value.running}")
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        Log.i(TAG, "service destroyed, running=${ZhsTaskController.state.value.running}")
+        wakeLock?.release()
         observer?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -76,14 +97,43 @@ class ZhsTaskService : Service() {
         if (observer != null) return
         observer = scope.launch {
             ZhsTaskController.state.collect { state ->
-                if (state.running) {
-                    notify(state, textOf(state), final = false)
-                } else {
-                    notifyFinal(state)
-                    finishForeground()
+                when (state.servicePhase()) {
+                    ZhsServicePhase.RUNNING -> {
+                        acquireWakeLock()
+                        notify(state, textOf(state), final = false)
+                    }
+
+                    ZhsServicePhase.FINISHED -> {
+                        notifyFinal(state)
+                        finishForeground()
+                    }
+
+                    // 还没开始：保持前台等状态变化。启动竞态已消除，这里不应出现，
+                    // 但绝不能把它当成「已结束」而收尾，否则任务会裸跑。
+                    ZhsServicePhase.WAIT -> Unit
                 }
+                logPhase(state)
             }
         }
+    }
+
+    private fun logPhase(state: ZhsTaskState) {
+        val phase = state.servicePhase()
+        if (phase == lastPhase) return
+        lastPhase = phase
+        Log.i(
+            TAG,
+            "phase $phase mode=${state.mode} updatedAt=${state.updatedAt} " +
+                "error=${state.error?.let { "yes" } ?: "no"}",
+        )
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val lock = wakeLock ?: BrushWakeLock.create(this, WAKE_LOCK_TAG).also {
+            wakeLock = it
+        }
+        if (lock.acquire()) Log.i(TAG, "wake lock acquired") else Log.w(TAG, "wake lock unavailable")
     }
 
     private fun startForegroundNotification() {
@@ -92,10 +142,15 @@ class ZhsTaskService : Service() {
         lastPostedText = null
         lastPostedAtMillis = 0L
         val state = ZhsTaskController.state.value
+        val text = if (state.servicePhase() == ZhsServicePhase.WAIT) {
+            "准备启动任务"
+        } else {
+            textOf(state)
+        }
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            builder(state, textOf(state)).build(),
+            builder(state, text).build(),
             foregroundType,
         )
     }
@@ -187,6 +242,7 @@ class ZhsTaskService : Service() {
     }
 
     private fun finishForeground() {
+        wakeLock?.release()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -245,6 +301,8 @@ class ZhsTaskService : Service() {
         }
 
     companion object {
+        private const val TAG = "ZhsTaskService"
+        private const val WAKE_LOCK_TAG = "guanlitong:zhs-study"
         private const val PROGRESS_CHANNEL_ID = "zhs_task"
         private const val NOTIFICATION_ID = 2003
         private const val FINAL_NOTIFICATION_ID = 2301

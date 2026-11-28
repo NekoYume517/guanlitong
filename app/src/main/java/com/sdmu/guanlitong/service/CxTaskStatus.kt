@@ -18,6 +18,8 @@ data class CxTaskState(
     val fatalError: String? = null,
     /** 非空表示「部分失败」：有章节没取到，结果不代表课程真实状态。 */
     val incomplete: String? = null,
+    /** 最近一次状态变化的时间，日志里用来判断任务是否还在推进。 */
+    val updatedAt: Long = 0,
 ) {
     val taskPercent: Int
         get() = if (duration <= 0) 0 else (position * 100 / duration).coerceIn(0, 100)
@@ -34,7 +36,7 @@ object CxTaskStatus {
     private var startedAt = 0L
 
     internal fun update(transform: (CxTaskState) -> CxTaskState) {
-        _state.value = transform(_state.value)
+        _state.value = transform(_state.value).copy(updatedAt = System.currentTimeMillis())
         syncRegistry()
     }
 
@@ -49,6 +51,7 @@ object CxTaskStatus {
             running = true,
             courseName = courseName,
             phase = phase,
+            updatedAt = startedAt,
         )
         syncRegistry()
     }
@@ -95,6 +98,7 @@ object CxTaskStatus {
             message = message,
             fatalError = fatalError,
             incomplete = incomplete,
+            updatedAt = System.currentTimeMillis(),
         )
         BrushTaskRegistry.unregister(REGISTRY_ID)
     }

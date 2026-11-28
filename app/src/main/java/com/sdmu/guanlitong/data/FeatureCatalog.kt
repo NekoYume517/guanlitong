@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -75,6 +76,9 @@ sealed interface FeatureAction {
     /** 山管官方动态应用；appId 对应服务端 YYID，复用现有网页免登路由。 */
     data class SdgyApp(val action: SdgyWebAction) : FeatureAction
 
+    /** 校园网认证：深澜门户登录、注销与联网状态。 */
+    data object Srun : FeatureAction
+
     /** 打开某个服务的账号页（登录 / 退出 / 记住密码）。 */
     data class Account(val serviceId: String) : FeatureAction
 
@@ -107,6 +111,7 @@ val ServiceFeature.targetServiceId: String
         is FeatureAction.Pu -> serviceId
         is FeatureAction.Cx -> serviceId
         is FeatureAction.Zhs -> serviceId
+        FeatureAction.Srun -> "srun"
         is FeatureAction.SdgyApp -> serviceId
         FeatureAction.Timetable -> serviceId
     }
@@ -289,6 +294,14 @@ ServiceFeature(
             subtitle = "共享课 · 翻转课",
             icon = Icons.Outlined.CastForEducation,
             action = FeatureAction.Zhs(ZhsPage.Courses),
+        ),
+        ServiceFeature(
+            id = "srun.login",
+            serviceId = "srun",
+            title = "校园网认证",
+            subtitle = "登录 · 注销 · 联网状态",
+            icon = Icons.Outlined.Wifi,
+            action = FeatureAction.Srun,
         ),
     )
 

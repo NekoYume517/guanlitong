@@ -1,5 +1,7 @@
 package com.sdmu.guanlitong.ui.zhs
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +89,8 @@ import com.sdmu.guanlitong.data.zhs.formatSpan
 import com.sdmu.guanlitong.data.zhs.ZhsSummary
 import com.sdmu.guanlitong.data.zhs.ZhsVideo
 import com.sdmu.guanlitong.data.zhs.progressPercent
+import com.sdmu.guanlitong.ui.sdgy.hasPermission
+import com.sdmu.guanlitong.ui.sdgy.rememberPermissionRequester
 import com.sdmu.guanlitong.data.zhs.zhsMessage
 import com.sdmu.guanlitong.ui.cx.CxColdStartLoading
 import com.sdmu.guanlitong.ui.sdgy.SdgyMessage
@@ -364,6 +368,21 @@ private fun ChaptersContent(
     val context = LocalContext.current
     val task by ZhsTaskController.state.collectAsState()
     val running = task.running
+    // Android 13+ 没有通知权限时前台服务仍会跑，但通知栏看不到进度与终态；
+    // 这里先申请一次，拒绝就明说影响，任务照常开始，不阻断流程。
+    var permissionNotice by remember { mutableStateOf<String?>(null) }
+    val requestPermission = rememberPermissionRequester { granted ->
+        if (!granted) {
+            permissionNotice = "未授予通知权限：刷课仍会继续，但通知栏看不到进度和结果。"
+        }
+    }
+    fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !context.hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            requestPermission(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     // 本课程的刷课结束（含单节）后刷新章节学时，和旧项目「结束刷新列表」一致。
     var wasRunning by remember { mutableStateOf(false) }
     LaunchedEffect(task.running, task.courseId) {
@@ -407,6 +426,7 @@ private fun ChaptersContent(
                     task = task,
                     courseId = course.courseId,
                     onStart = {
+                        ensureNotificationPermission()
                         ZhsTaskController.startBatch(
                             context = context,
                             course = course,
@@ -429,6 +449,15 @@ private fun ChaptersContent(
                     )
                 }
             }
+            permissionNotice?.let { text ->
+                item(key = "permission") {
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
             itemsIndexed(chapters) { index, chapter ->
                 ChapterCard(
                     chapter = chapter,
@@ -436,6 +465,7 @@ private fun ChaptersContent(
                     running = running,
                     progress = task.items,
                     onBrushItem = { item ->
+                        ensureNotificationPermission()
                         ZhsTaskController.startItem(
                             context = context,
                             course = course,

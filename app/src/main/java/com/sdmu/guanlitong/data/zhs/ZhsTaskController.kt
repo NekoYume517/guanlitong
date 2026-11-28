@@ -1,6 +1,7 @@
 package com.sdmu.guanlitong.data.zhs
 
 import android.content.Context
+import android.util.Log
 import com.sdmu.guanlitong.service.BrushTaskRegistry
 import com.sdmu.guanlitong.service.BrushTaskRoutes
 import com.sdmu.guanlitong.service.BrushTaskSnapshot
@@ -80,8 +81,10 @@ object ZhsTaskController {
         choice: ZhsSpeedChoice = speed.choice,
     ) {
         if (state.value.running) return
+        // 先同步写状态、再起协程与服务：服务 observe 的首帧就能看到 running=true，
+        // 不会把「还没开始」误判成「已结束」而摘掉通知、停掉服务。
+        machine.beginBatch(course.courseId, course.name, minutes * 60, choice)
         start(context, choice) { repo ->
-            machine.beginBatch(course.courseId, course.name, minutes * 60, choice)
             val outcome = repo.brush(
                 course = course,
                 chapters = chapters,
@@ -102,8 +105,8 @@ object ZhsTaskController {
         choice: ZhsSpeedChoice = speed.choice,
     ) {
         if (state.value.running) return
+        machine.beginItem(course.courseId, course.name, item, choice)
         start(context, choice) { repo ->
-            machine.beginItem(course.courseId, course.name, item, choice)
             val outcome = repo.brushItem(
                 course = course,
                 item = item,
@@ -145,6 +148,8 @@ object ZhsTaskController {
                 throw e
             } catch (e: Throwable) {
                 val expired = (e as? ZhsException)?.kind == ZhsErrorKind.EXPIRED
+                // 只记异常种类，不打消息原文，避免把会话/账号相关文本带进日志。
+                Log.w(TAG, "task failed kind=${(e as? ZhsException)?.kind}")
                 machine.fail(e.zhsMessage(), expired = expired)
                 // 刷课不自动续跑：人机验证通过后只重登，由用户重新开始任务。
                 // 失败晚于一次成功重登时不再重复弹窗。
@@ -153,8 +158,15 @@ object ZhsTaskController {
                 }
             }
         }
-        ZhsTaskService.start(appContext)
+        // 后台启动前台服务可能被系统拒绝（12+ 的后台启动限制、厂商策略）。
+        // 拒绝时任务仍在进程内跑，只是没有常驻通知，不能让它冒泡到界面层崩掉。
+        try {
+            ZhsTaskService.start(appContext)
+        } catch (e: Throwable) {
+            Log.w(TAG, "foreground service start rejected", e)
+        }
     }
 
+    private const val TAG = "ZhsTaskController"
     private const val TASK_ID = "zhs.study"
 }

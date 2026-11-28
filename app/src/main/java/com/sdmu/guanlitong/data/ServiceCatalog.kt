@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.CastForEducation
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -75,12 +76,22 @@ SchoolService(
             configurable = false,
             requiresAccount = true,
         ),
+        SchoolService(
+            id = "srun",
+            name = "校园网认证",
+            summary = "深澜门户 · 登录 · 注销",
+            defaultUrl = "https://wlrz.sdmu.edu.cn",
+            loginMode = LoginMode.CREDENTIAL,
+            icon = Icons.Outlined.Wifi,
+            accent = Color(0xFF1677B8),
+            configurable = false,
+        ),
     )
 
-    /** 「功能」页顶部的分类：教务系统、山管 App、第二课堂、学习通。 */
+    /** 「功能」页顶部的分类：教务系统、山管 App、第二课堂、学习通与校园网认证。 */
     val featureServices: List<SchoolService>
         get() = services.filter {
-            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx" || it.id == "zhs"
+            it.id == "jwxt" || it.id == "sdgy" || it.id == "pu" || it.id == "cx" || it.id == "zhs" || it.id == "srun"
         }
 
     /** 「我的」与概览「账号状态」展示需要独立登录的服务；抢课助手只作为数据源。 */
