@@ -154,7 +154,7 @@ fun MineScreen(
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text("退出全部账号？") },
-            text = { Text("教务系统、抢课助手、山管 App、第二课堂和学习通的账号、密码、网页登录状态和课表缓存都会被删除，需要重新登录。") },
+            text = { Text("教务系统、抢课助手、山管 App、第二课堂、学习通和知到的账号、密码、网页登录状态和课表缓存都会被删除，需要重新登录。") },
             confirmButton = {
                 TextButton(
                     onClick = {

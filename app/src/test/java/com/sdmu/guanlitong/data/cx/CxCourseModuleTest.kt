@@ -23,27 +23,30 @@ class CxCourseModuleTest {
     }
 
     @Test
-    fun chaptersIsTheOnlyAvailableModuleForNow() {
+    fun chaptersAndMaterialsAreTheAvailableModules() {
         val chapters = cxCourseModules.first { it.id == "chapters" }
         assertTrue(chapters.available)
         assertEquals(CxPage.CourseDetail, chapters.target)
 
-        assertTrue(cxCourseModules.filter { it.id != "chapters" }.none { it.available })
+        val materials = cxCourseModules.first { it.id == "materials" }
+        assertTrue(materials.available)
+        assertEquals(CxPage.Materials, materials.target)
+
+        assertTrue(cxCourseModules.filter { it.id != "chapters" && it.id != "materials" }
+            .none { it.available })
     }
 
     @Test
-    fun unconnectedModulesAreExplicitlyDisabled() {
-        for (id in listOf("materials", "works")) {
-            val module = cxCourseModules.first { it.id == id }
-            assertFalse(module.available)
-            assertNull(module.target)
-        }
+    fun worksIsStillExplicitlyDisabled() {
+        val works = cxCourseModules.first { it.id == "works" }
+        assertFalse(works.available)
+        assertNull(works.target)
     }
 
     @Test
     fun tapsRouteOnlyIntoTargetPagesThatExist() {
         assertEquals(CxPage.CourseDetail, cxCourseModuleTarget("chapters"))
-        assertNull(cxCourseModuleTarget("materials"))
+        assertEquals(CxPage.Materials, cxCourseModuleTarget("materials"))
         assertNull(cxCourseModuleTarget("works"))
         assertNull(cxCourseModuleTarget("not-a-module"))
     }

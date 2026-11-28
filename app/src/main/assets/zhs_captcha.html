@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>安全验证</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f7f7f8;
+      color: #1f2329;
+      margin: 0;
+      padding-top: 40px;
+      box-sizing: border-box;
+    }
+    #panel {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+      padding: 0 24px 24px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    #panel h1 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+    #panel p { font-size: 13px; line-height: 1.6; color: #646a73; margin: 0 0 18px; }
+    #start {
+      -webkit-appearance: none;
+      border: 0;
+      border-radius: 10px;
+      background: #2f6bff;
+      color: #fff;
+      font-size: 15px;
+      padding: 11px 22px;
+    }
+    #start:disabled { opacity: .5; }
+    #captcha { width: 100%; }
+  </style>
+  <script src="https://cstaticdun.126.net/load.min.js"></script>
+</head>
+<body>
+<div id="panel">
+  <h1>安全验证</h1>
+  <p id="tip">正在加载验证组件…</p>
+  <button id="start" type="button" disabled>开始验证</button>
+  <div id="captcha"></div>
+</div>
+<script>
+(function () {
+  var captcha = null;
+  var reported = false;
+  var popupOpen = false;
+  var tip = document.getElementById('tip');
+  var start = document.getElementById('start');
+
+  function report(kind, payload) {
+    try {
+      if (window.ZhsCaptcha && typeof window.ZhsCaptcha[kind] === 'function') {
+        window.ZhsCaptcha[kind](String(payload || ''));
+      }
+    } catch (e) { /* 原生侧已销毁时忽略 */ }
+  }
+
+  function fail(message) {
+    tip.textContent = message;
+    start.disabled = true;
+    report('onFail', message);
+  }
+
+  function finish(validate) {
+    if (reported) return;
+    reported = true;
+    popupOpen = false;
+    tip.textContent = '验证通过，正在提交登录…';
+    start.disabled = true;
+    report('onValidate', validate);
+  }
+
+  // 只在用户点击按钮时调用：WebView 里没有用户手势，易盾弹层可能画不出来。
+  function show() {
+    if (!captcha || popupOpen || reported) return;
+    try {
+      popupOpen = true;
+      start.disabled = true;
+      start.style.display = 'none';
+      captcha.popUp();
+    } catch (e) {
+      popupOpen = false;
+      start.disabled = false;
+      start.style.display = '';
+      tip.textContent = '滑块打开失败，请再次点击「开始验证」。';
+    }
+  }
+
+  function ready(instance) {
+    captcha = instance;
+    tip.textContent = '请点击下方按钮，拖动滑块完成验证。';
+    start.disabled = false;
+    report('onReady');
+  }
+
+  function init() {
+    if (captcha) {
+      start.disabled = false;
+      start.style.display = '';
+      return;
+    }
+    if (typeof initNECaptcha !== 'function') {
+      fail('验证组件加载失败，请检查网络后点「重试」。');
+      return;
+    }
+    tip.textContent = '正在加载验证组件…';
+    initNECaptcha({
+      element: '#captcha',
+      captchaId: '75f9f716460a422f89a628f50fd8cc2b',
+      mode: 'popup',
+      width: '280px',
+      lang: 'zh-CN',
+      feedbackEnable: false,
+      onVerify: function (error, data) {
+        if (error) {
+          popupOpen = false;
+          start.disabled = false;
+          start.style.display = '';
+          tip.textContent = '验证未通过，请重新拖动滑块。';
+          return;
+        }
+        if (!data || !data.validate) {
+          tip.textContent = '没有收到验证结果，请重试。';
+          return;
+        }
+        finish(data.validate);
+      },
+      onClose: function () {
+        popupOpen = false;
+        if (!reported) {
+          start.disabled = false;
+          start.style.display = '';
+          tip.textContent = '你关闭了验证窗口，可以再次点击「开始验证」。';
+          report('onClosed');
+        }
+      }
+    }, ready, function () {
+      fail('验证组件初始化失败，请点「重试」。');
+    });
+  }
+
+  // 原生侧「重试」：清掉失败状态重新拉起；已经初始化过就只恢复按钮。
+  window.zhsRetry = function () {
+    reported = false;
+    start.style.display = '';
+    if (captcha) {
+      tip.textContent = '请点击下方按钮，拖动滑块完成验证。';
+      start.disabled = false;
+      try { captcha.refresh(); } catch (e) {}
+    } else {
+      init();
+    }
+  };
+
+  start.addEventListener('click', show);
+  init();
+})();
+</script>
+</body>
+</html>
